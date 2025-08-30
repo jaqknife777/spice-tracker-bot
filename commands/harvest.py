@@ -10,7 +10,6 @@ COMMAND_METADATA = {
 }
 
 import time
-from discord.ext import commands
 from utils.database_utils import timed_database_operation, validate_user_exists, get_user_stats
 from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics

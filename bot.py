@@ -7,8 +7,6 @@ import discord
 from discord.ext import commands
 import os
 import time
-import datetime
-import asyncio
 import http.server
 import socketserver
 import threading
@@ -302,7 +300,7 @@ def start_health_server():
                     'status': 'healthy',
                     'bot_ready': bot.is_ready(),
                     'guild_count': len(bot.guilds),
-                    'timestamp': datetime.datetime.utcnow().isoformat()
+                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
                 }
                 self.wfile.write(str(status).encode())
                 
