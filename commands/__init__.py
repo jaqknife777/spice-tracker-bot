@@ -24,8 +24,17 @@ def discover_commands():
                 # Import the module
                 module = importlib.import_module(f'.{module_name}', package=__name__)
                 
-                # Get the command function (same name as module)
-                command_func = getattr(module, module_name, None)
+                # Get the command function - look for common patterns
+                command_func = None
+                if hasattr(module, module_name):  # Function same name as module
+                    command_func = getattr(module, module_name)
+                elif hasattr(module, f'{module_name}_command'):  # Function with _command suffix
+                    command_func = getattr(module, f'{module_name}_command')
+                elif hasattr(module, f'{module_name}_details'):  # Function with _details suffix
+                    command_func = getattr(module, f'{module_name}_details')
+                elif hasattr(module, 'help_command') and module_name == 'help':  # Special case for help
+                    command_func = getattr(module, 'help_command')
+                
                 if command_func:
                     commands[module_name] = command_func
                 
@@ -47,3 +56,7 @@ __all__ = list(COMMANDS.keys())
 
 # Export all discovered metadata
 COMMAND_METADATA = COMMAND_METADATA
+
+# Also export individual command functions for direct import
+for cmd_name, cmd_func in COMMANDS.items():
+    globals()[cmd_name] = cmd_func
