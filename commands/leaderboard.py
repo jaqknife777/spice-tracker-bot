@@ -1,6 +1,13 @@
 """
-Leaderboard command for displaying top refiners by melange earned.
+Leaderboard command for displaying top spice refiners by melange production.
 """
+
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['top'],
+    'description': "Display top spice refiners by melange production",
+    'params': {'limit': "Number of top refiners to display (default: 10)"}
+}
 
 import time
 from utils.database_utils import timed_database_operation

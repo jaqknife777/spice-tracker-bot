@@ -2,6 +2,13 @@
 Payment command for processing payment for a harvester's deposits (Admin only).
 """
 
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['pay'],
+    'description': "Process payment for a harvester's deposits (Admin only)",
+    'params': {'user': "Harvester to pay"}
+}
+
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_info_embed, build_success_embed

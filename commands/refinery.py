@@ -1,6 +1,12 @@
 """
-Refinery command for viewing total sand and melange statistics.
+Refinery command for viewing spice refinery statistics and progress.
 """
+
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['status'],
+    'description': "View your spice refinery statistics and progress"
+}
 
 import time
 from utils.database_utils import get_user_stats

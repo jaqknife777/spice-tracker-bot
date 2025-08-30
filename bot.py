@@ -159,72 +159,19 @@ def register_commands():
     """Register all commands with the bot's command tree"""
     
     # Command definitions with aliases
-    commands = {
-        'harvest': {
-            'aliases': ['sand'],
-            'description': "Log spice sand harvests and calculate melange conversion",
-            'params': {'amount': "Amount of spice sand harvested"},
-            'function': harvest
-        },
-        'refinery': {
-            'aliases': ['status'],
-            'description': "View your spice refinery statistics and progress",
-            'function': refinery
-        },
-        'leaderboard': {
-            'aliases': ['top'],
-            'description': "Display top spice refiners by melange production",
-            'params': {'limit': "Number of top refiners to display (default: 10)"},
-            'function': leaderboard
-        },
-        'conversion': {
-            'aliases': ['rate'],
-            'description': "View the current spice sand to melange conversion rate",
-            'function': conversion
-        },
-        'split': {
-            'aliases': [],
-            'description': "Split harvested spice sand among expedition members",
-            'params': {
-                'total_sand': "Total spice sand collected to split",
-                'harvester_percentage': "Percentage for primary harvester (default: 10%)"
-            },
-            'function': split
-        },
-        'help': {
-            'aliases': ['commands'],
-            'description': "Show all available spice tracking commands",
-            'function': help_command
-        },
-        'reset': {
-            'aliases': [],
-            'description': "Reset all spice refinery statistics (Admin only - USE WITH CAUTION)",
-            'params': {'confirm': "Confirm that you want to delete all refinery data"},
-            'function': reset
-        },
-        'ledger': {
-            'aliases': ['deposits'],
-            'description': "View your complete spice harvest ledger",
-            'function': ledger
-        },
-        'expedition': {
-            'aliases': ['exp'],
-            'description': "View details of a specific expedition",
-            'params': {'expedition_id': "ID of the expedition to view"},
-            'function': expedition_details
-        },
-        'payment': {
-            'aliases': ['pay'],
-            'description': "Process payment for a harvester's deposits (Admin only)",
-            'params': {'user': "Harvester to pay"},
-            'function': payment
-        },
-        'payroll': {
-            'aliases': ['payall'],
-            'description': "Process payments for all unpaid harvesters (Admin only)",
-            'function': payroll
+    # Get command metadata from the commands package
+    from commands import COMMAND_METADATA
+    
+    # Build commands dictionary with functions
+    commands = {}
+    for command_name, metadata in COMMAND_METADATA.items():
+        commands[command_name] = {
+            'aliases': metadata['aliases'],
+            'description': metadata['description'],
+            'function': globals()[command_name]
         }
-    }
+        if 'params' in metadata:
+            commands[command_name]['params'] = metadata['params']
     
     # Register all commands and their aliases
     for command_name, command_data in commands.items():

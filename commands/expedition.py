@@ -2,6 +2,13 @@
 Expedition command for viewing details of a specific expedition.
 """
 
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['exp'],
+    'description': "View details of a specific expedition",
+    'params': {'expedition_id': "ID of the expedition to view"}
+}
+
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_status_embed

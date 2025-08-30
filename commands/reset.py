@@ -2,6 +2,13 @@
 Reset command for resetting all spice refinery statistics (Admin only).
 """
 
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': [],
+    'description': "Reset all spice refinery statistics (Admin only - USE WITH CAUTION)",
+    'params': {'confirm': "Confirm that you want to delete all refinery data"}
+}
+
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_warning_embed

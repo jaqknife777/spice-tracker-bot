@@ -2,6 +2,13 @@
 Harvest command for logging spice sand harvests and calculating melange conversion.
 """
 
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['sand'],
+    'description': "Log spice sand harvests and calculate melange conversion",
+    'params': {'amount': "Amount of spice sand harvested"}
+}
+
 import time
 from discord.ext import commands
 from utils.database_utils import timed_database_operation, validate_user_exists, get_user_stats

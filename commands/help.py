@@ -1,6 +1,12 @@
 """
-Help command for showing all available commands and their descriptions.
+Help command for showing all available spice tracking commands.
 """
+
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['commands'],
+    'description': "Show all available spice tracking commands"
+}
 
 import os
 from utils.embed_utils import build_info_embed

@@ -1,6 +1,16 @@
 """
-Split command for splitting harvested spice sand among expedition members.
+Split command for dividing harvested spice sand among expedition members.
 """
+
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': [],
+    'description': "Split harvested spice sand among expedition members",
+    'params': {
+        'total_sand': "Total spice sand collected to split",
+        'harvester_percentage': "Percentage for primary harvester (default: 10%)"
+    }
+}
 
 import os
 import discord

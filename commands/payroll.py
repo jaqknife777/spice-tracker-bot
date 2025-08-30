@@ -2,6 +2,12 @@
 Payroll command for processing payments for all unpaid harvesters (Admin only).
 """
 
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['payall'],
+    'description': "Process payments for all unpaid harvesters (Admin only)"
+}
+
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_info_embed, build_success_embed

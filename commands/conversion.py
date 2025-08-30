@@ -2,6 +2,13 @@
 Conversion command for viewing the current spice sand to melange conversion rate.
 """
 
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['rate'],
+    'description': "View the current spice sand to melange conversion rate"
+}
+
+import time
 from utils.embed_utils import build_info_embed
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_sand_per_melange, send_response

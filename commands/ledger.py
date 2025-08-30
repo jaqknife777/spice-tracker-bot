@@ -2,6 +2,12 @@
 Ledger command for viewing complete spice harvest ledger.
 """
 
+# Command metadata
+COMMAND_METADATA = {
+    'aliases': ['deposits'],
+    'description': "View your complete spice harvest ledger"
+}
+
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_info_embed, build_status_embed
