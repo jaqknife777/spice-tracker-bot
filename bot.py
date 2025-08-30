@@ -19,12 +19,8 @@ from dotenv import load_dotenv
 from utils.logger import logger
 from utils.helpers import get_database
 
-# Import all commands
-from commands import (
-    harvest, refinery, leaderboard, conversion, split, 
-    help_command, reset, ledger, expedition_details, 
-    payment, payroll
-)
+# Import command metadata
+from commands import COMMAND_METADATA
 
 # Load environment variables
 load_dotenv()
@@ -143,6 +139,9 @@ async def on_ready():
                          db_init_time=f"{db_init_time:.3f}s",
                          guild_count=len(bot.guilds))
         print(f"🚀 Bot startup completed in {total_startup_time:.3f}s")
+        
+        # Register commands
+        register_commands()
             
     except Exception as error:
         total_startup_time = time.time() - bot_start_time
@@ -165,10 +164,14 @@ def register_commands():
     # Build commands dictionary with functions
     commands = {}
     for command_name, metadata in COMMAND_METADATA.items():
+        # Import the command function dynamically
+        command_module = __import__(f'commands.{command_name}', fromlist=[command_name])
+        command_function = getattr(command_module, command_name)
+        
         commands[command_name] = {
             'aliases': metadata['aliases'],
             'description': metadata['description'],
-            'function': globals()[command_name]
+            'function': command_function
         }
         if 'params' in metadata:
             commands[command_name]['params'] = metadata['params']
