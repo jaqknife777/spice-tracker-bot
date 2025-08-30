@@ -1,99 +1,143 @@
+"""
+Decorators for Discord bot commands.
+"""
+
 import time
-import discord
-from functools import wraps
-from .logger import logger
-from .rate_limiter import RateLimiter
-from .permissions import check_admin_permission
+import asyncio
+from utils.logger import logger
+from utils.helpers import send_response
 
-# Global rate limiter instance
-rate_limiter = RateLimiter()
 
-def command_handler(command_name, rate_limit=True, admin_only=False, description=None):
-    """Decorator that handles common command setup, logging, rate limiting, and error handling"""
+def handle_interaction_expiration(func):
+    """Decorator to handle interaction expiration gracefully"""
+    async def wrapper(interaction, *args, **kwargs):
+        command_start_time = time.time()
+        use_followup = True
+        
+        # Check if this command requires guild context
+        if not hasattr(interaction, 'guild') or not interaction.guild:
+            try:
+                await send_response(interaction, "❌ This command can only be used in a Discord server, not in direct messages.", use_followup=False, ephemeral=True)
+            except:
+                # If we can't send a response, just log it
+                logger.warning(f"Command {func.__name__} called in DM context, cannot proceed")
+            return
+        
+        try:
+            # Validate interaction before attempting defer
+            if not hasattr(interaction, 'response') or not hasattr(interaction, 'user'):
+                logger.warning(f"Invalid interaction object for {func.__name__}, falling back to channel messages")
+                use_followup = False
+                return
+            
+            # Try to defer the response with a timeout
+            defer_start = time.time()
+            await asyncio.wait_for(interaction.response.defer(thinking=True), timeout=5.0)
+            defer_time = time.time() - defer_start
+            logger.info(f"Interaction deferred successfully", 
+                       command=func.__name__, 
+                       defer_time=f"{defer_time:.3f}s")
+            
+        except asyncio.TimeoutError:
+            # Defer timed out, fall back to channel messages
+            use_followup = False
+            defer_time = time.time() - defer_start
+            logger.warning(f"Defer timeout for {func.__name__} command", 
+                           user=interaction.user.display_name, 
+                           user_id=interaction.user.id, 
+                           defer_time=f"{defer_time:.3f}s")
+        except Exception as defer_error:
+            if "Unknown interaction" in str(defer_error) or "NotFound" in str(defer_error):
+                # Interaction expired, we'll need to send channel messages
+                use_followup = False
+                defer_time = time.time() - defer_start
+                logger.warning(f"Interaction expired for {func.__name__} command", 
+                               user=interaction.user.display_name, 
+                               user_id=interaction.user.id, 
+                               defer_time=f"{defer_time:.3f}s")
+            else:
+                # Re-raise if it's a different error
+                raise defer_error
+        
+        # Add use_followup to kwargs so the function can use it
+        kwargs['use_followup'] = use_followup
+        
+        try:
+            function_start = time.time()
+            result = await func(interaction, *args, **kwargs)
+            function_time = time.time() - function_start
+            total_time = time.time() - command_start_time
+            
+            logger.command_success(
+                command=func.__name__,
+                user_id=str(interaction.user.id),
+                username=interaction.user.display_name,
+                execution_time=function_time,
+                total_time=total_time,
+                guild_id=str(interaction.guild.id) if interaction.guild else None,
+                guild_name=interaction.guild.name if interaction.guild else None
+            )
+            
+            return result
+        except Exception as func_error:
+            function_start = time.time()
+            function_time = time.time() - function_start
+            total_time = time.time() - command_start_time
+            
+            # Log the error but don't re-raise it
+            logger.command_error(
+                command=func.__name__,
+                user_id=str(interaction.user.id),
+                username=interaction.user.display_name,
+                error=str(func_error),
+                execution_time=function_time,
+                total_time=total_time,
+                guild_id=str(interaction.guild.id) if interaction.guild else None,
+                guild_name=interaction.guild.name if interaction.guild else None
+            )
+            
+            # Try to send error response, but don't let it fail the decorator
+            try:
+                # Check if interaction is still valid before trying to send response
+                # Guild can be None for DMs, so we only require channel
+                if hasattr(interaction, 'channel') and interaction.channel:
+                    await send_response(interaction, "❌ An error occurred while processing your command.", use_followup=use_followup, ephemeral=True)
+                else:
+                    logger.warning(f"Interaction invalid for {func.__name__}, skipping error response")
+            except Exception as response_error:
+                logger.error(f"Failed to send error response for {func.__name__}: {response_error}")
+                # Don't re-raise - just log the failure
+            
+            # Return None to indicate error occurred
+            return None
+    
+    return wrapper
+
+
+def monitor_performance(operation_name: str = None):
+    """Decorator to monitor performance of database operations and other timed operations"""
     def decorator(func):
-        # Create a wrapper function that handles the command logic
-        async def wrapper(interaction: discord.Interaction, *args, **kwargs):
+        async def wrapper(*args, **kwargs):
+            operation = operation_name or func.__name__
             start_time = time.time()
-            user_id = str(interaction.user.id)
-            username = interaction.user.display_name
-            guild_id = str(interaction.guild.id) if interaction.guild else None
-            guild_name = interaction.guild.name if interaction.guild else None
-            
-            # Log command execution
-            log_data = {
-                'user_id': user_id,
-                'username': username,
-                'guild_id': guild_id,
-                'guild_name': guild_name
-            }
-            # Add command-specific parameters
-            if args:
-                log_data['args'] = args
-            if kwargs:
-                log_data.update(kwargs)
-            
-            logger.command_executed(command_name, **log_data)
-            
-            # Check rate limit
-            if rate_limit and not rate_limiter.check_rate_limit(user_id, command_name):
-                logger.rate_limit_hit(command_name, user_id, username)
-                await interaction.response.send_message(
-                    "⏰ Please wait before using this command again.",
-                    ephemeral=True
-                )
-                return
-            
-            # Check admin permissions
-            if admin_only and not check_admin_permission(interaction.user):
-                logger.permission_denied(command_name, user_id, username, "Administrator")
-                await interaction.response.send_message(
-                    "❌ You need Administrator permissions to use this command.",
-                    ephemeral=True
-                )
-                return
             
             try:
-                # Call the actual command function
-                result = await func(interaction, *args, **kwargs)
-                
-                # Log successful completion
+                result = await func(*args, **kwargs)
                 execution_time = time.time() - start_time
-                success_data = {
-                    'user_id': user_id,
-                    'username': username,
-                    'execution_time': execution_time
-                }
-                if result and isinstance(result, dict):
-                    success_data.update(result)
                 
-                logger.command_success(command_name, **success_data)
+                # Log performance metrics
+                logger.info(f"{operation} completed successfully", 
+                           execution_time=f"{execution_time:.3f}s",
+                           operation=operation)
+                
                 return result
-                
-            except Exception as error:
-                # Log error
+            except Exception as e:
                 execution_time = time.time() - start_time
-                error_data = {
-                    'user_id': user_id,
-                    'username': username,
-                    'error': str(error),
-                    'execution_time': execution_time
-                }
-                # Add command-specific error context
-                if args:
-                    error_data['args'] = args
-                if kwargs:
-                    error_data.update(kwargs)
-                
-                logger.command_error(command_name, **error_data)
-                print(f'Error in {command_name} command: {error}')
-                
-                # Send error message to user
-                error_msg = f"❌ An error occurred while processing your request: {error}"
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(error_msg, ephemeral=True)
-                else:
-                    await interaction.followup.send(error_msg, ephemeral=True)
+                logger.error(f"{operation} failed", 
+                           execution_time=f"{execution_time:.3f}s",
+                           operation=operation,
+                           error=str(e))
+                raise
         
-        # Return the wrapper function - the bot will register it manually
         return wrapper
     return decorator
