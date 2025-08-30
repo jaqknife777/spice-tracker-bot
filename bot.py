@@ -75,8 +75,7 @@ def register_commands():
             'description': "Split harvested spice sand among expedition members",
             'params': {
                 'total_sand': "Total spice sand collected to split",
-                'participants': "Number of expedition members participating",
-                'harvester_percentage': "Percentage for primary harvester (default: uses environment variable)"
+                'harvester_percentage': "Percentage for primary harvester (default: 10%)"
             },
             'function': split
         },
@@ -95,6 +94,12 @@ def register_commands():
             'aliases': ['deposits'],
             'description': "View your complete spice harvest ledger",
             'function': ledger
+        },
+        'expedition': {
+            'aliases': ['exp'],
+            'description': "View details of a specific expedition",
+            'params': {'expedition_id': "ID of the expedition to view"},
+            'function': expedition_details
         },
         'payment': {
             'aliases': ['pay'],
@@ -131,8 +136,8 @@ def register_commands():
                         await cmd_data['function'](interaction)
                 elif cmd_name == 'split':
                     @bot.tree.command(name=command_name, description=cmd_data['description'])
-                    async def wrapper(interaction: discord.Interaction, total_sand: int, participants: int, harvester_percentage: float = None):
-                        await cmd_data['function'](interaction, total_sand, participants, harvester_percentage)
+                    async def wrapper(interaction: discord.Interaction, total_sand: int, harvester_percentage: float = None):
+                        await cmd_data['function'](interaction, total_sand, harvester_percentage)
                 elif cmd_name == 'reset':
                     @bot.tree.command(name=command_name, description=cmd_data['description'])
                     async def wrapper(interaction: discord.Interaction, confirm: bool):
@@ -141,6 +146,10 @@ def register_commands():
                     @bot.tree.command(name=command_name, description=cmd_data['description'])
                     async def wrapper(interaction: discord.Interaction, user: discord.Member):
                         await cmd_data['function'](interaction, user)
+                elif cmd_name == 'expedition':
+                    @bot.tree.command(name=command_name, description=cmd_data['description'])
+                    async def wrapper(interaction: discord.Interaction, expedition_id: int):
+                        await cmd_data['function'](interaction, expedition_id)
                 else:
                     # Generic fallback for other commands
                     @bot.tree.command(name=command_name, description=cmd_data['description'])
@@ -181,8 +190,8 @@ def register_commands():
                             await cmd_data['function'](interaction)
                     elif 'total_sand' in cmd_data['params']:  # split
                         @bot.tree.command(name=alias_name, description=cmd_data['description'])
-                        async def wrapper(interaction: discord.Interaction, total_sand: int, participants: int, harvester_percentage: float = None):
-                            await cmd_data['function'](interaction, total_sand, participants, harvester_percentage)
+                        async def wrapper(interaction: discord.Interaction, total_sand: int, harvester_percentage: float = None):
+                            await cmd_data['function'](interaction, total_sand, harvester_percentage)
                     elif 'confirm' in cmd_data['params']:  # reset
                         @bot.tree.command(name=alias_name, description=cmd_data['description'])
                         async def wrapper(interaction: discord.Interaction, confirm: bool):
@@ -191,6 +200,10 @@ def register_commands():
                         @bot.tree.command(name=alias_name, description=cmd_data['description'])
                         async def wrapper(interaction: discord.Interaction, user: discord.Member):
                             await cmd_data['function'](interaction, user)
+                    elif 'expedition_id' in cmd_data['params']:  # expedition/exp
+                        @bot.tree.command(name=alias_name, description=cmd_data['description'])
+                        async def wrapper(interaction: discord.Interaction, expedition_id: int):
+                            await cmd_data['function'](interaction, expedition_id)
                     else:
                         # Generic fallback for other commands
                         @bot.tree.command(name=alias_name, description=cmd_data['description'])
@@ -460,52 +473,199 @@ async def conversion(interaction: discord.Interaction):
         logger.error(f"Error in conversion command: {error}")
         await interaction.response.send_message("❌ An error occurred while updating the refinement rate.", ephemeral=True)
 
-async def split(interaction: discord.Interaction, total_sand: int, participants: int, harvester_percentage: float = None):
+async def split(interaction: discord.Interaction, total_sand: int, harvester_percentage: float = None):
     """Split harvested spice sand among expedition members"""
     try:
         # Use environment variable if no harvester_percentage provided
         if harvester_percentage is None:
-            harvester_percentage = float(os.getenv('DEFAULT_HARVESTER_PERCENTAGE', 25.0))
+            harvester_percentage = float(os.getenv('DEFAULT_HARVESTER_PERCENTAGE', 10.0))  # Default to 10%
         
         # Validate inputs
         if total_sand < 1:
             await interaction.response.send_message("❌ Total spice sand must be at least 1.", ephemeral=True)
             return
-        if participants < 1:
-            await interaction.response.send_message("❌ Number of expedition members must be at least 1.", ephemeral=True)
-            return
         if not 0 <= harvester_percentage <= 100:
             await interaction.response.send_message("❌ Primary harvester percentage must be between 0 and 100.", ephemeral=True)
             return
         
-        # Calculate splits
-        sand_per_melange = get_sand_per_melange()
-        harvester_sand = int(total_sand * (harvester_percentage / 100))
-        remaining_sand = total_sand - harvester_sand
+        # Create a modal to collect participant information
+        class ExpeditionModal(discord.ui.Modal, title="🏜️ Expedition Participants"):
+            participants_input = discord.ui.TextInput(
+                label="Participant Discord IDs (one per line)",
+                placeholder="Enter Discord user IDs, one per line\nExample:\n123456789012345678\n987654321098765432",
+                style=discord.TextStyle.paragraph,
+                required=True,
+                min_length=1,
+                max_length=1000
+            )
+            
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                try:
+                    # Parse participant IDs
+                    participant_ids = [pid.strip() for pid in self.participants_input.value.split('\n') if pid.strip()]
+                    
+                    if not participant_ids:
+                        await modal_interaction.response.send_message("❌ No valid participant IDs provided.", ephemeral=True)
+                        return
+                    
+                    # Defer response to prevent timeout
+                    await modal_interaction.response.defer(thinking=True)
+                    
+                    # Get conversion rate
+                    sand_per_melange = get_sand_per_melange()
+                    
+                    # Create expedition record
+                    expedition_id = await get_database().create_expedition(
+                        str(interaction.user.id),
+                        interaction.user.display_name,
+                        total_sand,
+                        harvester_percentage,
+                        sand_per_melange
+                    )
+                    
+                    if not expedition_id:
+                        await modal_interaction.followup.send("❌ Failed to create expedition record.", ephemeral=True)
+                        return
+                    
+                    # Calculate harvester share
+                    harvester_sand = int(total_sand * (harvester_percentage / 100))
+                    remaining_sand = total_sand - harvester_sand
+                    
+                    # Calculate remaining share per participant (excluding harvester)
+                    remaining_participants = len(participant_ids) + 1  # +1 for harvester
+                    share_per_participant = remaining_sand // remaining_participants if remaining_participants > 0 else 0
+                    leftover_sand = remaining_sand % remaining_participants if remaining_participants > 0 else remaining_sand
+                    
+                    # Add harvester (initiator) as primary harvester
+                    harvester_melange = harvester_sand // sand_per_melange
+                    harvester_leftover = harvester_sand % sand_per_melange
+                    
+                    await get_database().add_expedition_participant(
+                        expedition_id,
+                        str(interaction.user.id),
+                        interaction.user.display_name,
+                        harvester_sand,
+                        harvester_melange,
+                        harvester_leftover,
+                        is_harvester=True
+                    )
+                    
+                    # Create expedition deposit for harvester
+                    await get_database().add_expedition_deposit(
+                        str(interaction.user.id),
+                        interaction.user.display_name,
+                        harvester_sand,
+                        expedition_id
+                    )
+                    
+                    # Add remaining participants
+                    participant_details = []
+                    total_melange = harvester_melange
+                    
+                    for participant_id in participant_ids:
+                        # Try to get user info from Discord
+                        try:
+                            user = await modal_interaction.guild.fetch_member(int(participant_id))
+                            username = user.display_name
+                        except:
+                            username = f"User_{participant_id}"
+                        
+                        # Calculate participant share
+                        participant_sand = share_per_participant
+                        participant_melange = participant_sand // sand_per_melange
+                        participant_leftover = participant_sand % sand_per_melange
+                        
+                        # Add to database
+                        await get_database().add_expedition_participant(
+                            expedition_id,
+                            participant_id,
+                            username,
+                            participant_sand,
+                            participant_melange,
+                            participant_leftover,
+                            is_harvester=False
+                        )
+                        
+                        # Create expedition deposit for participant
+                        await get_database().add_expedition_deposit(
+                            participant_id,
+                            username,
+                            participant_sand,
+                            expedition_id
+                        )
+                        
+                        participant_details.append(f"**{username}**: {participant_sand:,} sand ({participant_melange:,} melange)")
+                        total_melange += participant_melange
+                    
+                    # Add leftover to harvester if any
+                    if leftover_sand > 0:
+                        leftover_melange = leftover_sand // sand_per_melange
+                        leftover_remaining = leftover_sand % sand_per_melange
+                        
+                        # Update harvester's share
+                        await get_database().add_expedition_participant(
+                            expedition_id,
+                            str(interaction.user.id),
+                            interaction.user.display_name,
+                            leftover_sand,
+                            leftover_melange,
+                            leftover_remaining,
+                            is_harvester=False
+                        )
+                        
+                        # Create expedition deposit for leftover
+                        await get_database().add_expedition_deposit(
+                            str(interaction.user.id),
+                            interaction.user.display_name,
+                            leftover_sand,
+                            expedition_id
+                        )
+                        
+                        harvester_sand += leftover_sand
+                        harvester_melange += leftover_melange
+                        harvester_leftover += leftover_remaining
+                    
+                    # Build response embed
+                    embed = (EmbedBuilder("🏜️ Expedition Created", 
+                                          description=f"**Expedition #{expedition_id}** has been created and recorded in the database!",
+                                          color=0xF39C12, timestamp=modal_interaction.created_at)
+                             .add_field("📊 Expedition Summary", 
+                                       f"**Total Sand:** {total_sand:,}\n"
+                                       f"**Primary Harvester:** {interaction.user.display_name}\n"
+                                       f"**Harvester Share:** {harvester_sand:,} sand ({harvester_percentage}%)\n"
+                                       f"**Participants:** {len(participant_ids) + 1}", inline=False)
+                             .add_field("💰 Melange Distribution", 
+                                       f"**Harvester Melange:** {harvester_melange:,}\n"
+                                       f"**Total Melange:** {total_melange:,}", inline=False)
+                             .add_field("📋 Participants", 
+                                       f"**Primary Harvester:** {interaction.user.display_name} - {harvester_sand:,} sand\n" +
+                                       "\n".join(participant_details), inline=False)
+                             .add_field("📋 Database Status", 
+                                       f"✅ Expedition record created\n"
+                                       f"✅ Participant shares recorded\n"
+                                       f"✅ Deposits logged for payout tracking\n"
+                                       f"🔗 Use `/expedition {expedition_id}` to view details", inline=False)
+                             .set_footer(f"Expedition initiated by {interaction.user.display_name}", interaction.user.display_avatar.url))
+                    
+                    await modal_interaction.followup.send(embed=embed.build())
+                    
+                    # Log the expedition creation
+                    logger.bot_event(f"Expedition {expedition_id} created by {interaction.user.display_name} ({interaction.user.id}) - {total_sand} sand, {harvester_percentage}% harvester share, {len(participant_ids)} participants")
+                    
+                except Exception as error:
+                    logger.error(f"Error in expedition modal: {error}")
+                    try:
+                        await modal_interaction.followup.send("❌ An error occurred while creating the expedition.", ephemeral=True)
+                    except:
+                        await modal_interaction.channel.send("❌ An error occurred while creating the expedition.")
         
-        harvester_melange = harvester_sand // sand_per_melange
-        harvester_leftover_sand = harvester_sand % sand_per_melange
-        
-        sand_per_participant = remaining_sand // participants
-        melange_per_participant = sand_per_participant // sand_per_melange
-        leftover_sand_per_participant = sand_per_participant % sand_per_melange
-        
-        total_distributed = sand_per_participant * participants
-        remainder_sand = remaining_sand - total_distributed
-        
-        embed = (EmbedBuilder("🏜️ Expedition Split Operation", 
-                              description=f"**Total Spice Sand:** {total_sand:,}\n**Expedition Members:** {participants}\n**Primary Harvester Cut:** {harvester_percentage}%",
-                              color=0xF39C12, timestamp=interaction.created_at)
-                 .add_field("🏭 Primary Harvester Share", f"**Sand:** {harvester_sand:,}\n**Melange:** {harvester_melange:,}\n**Leftover Sand:** {harvester_leftover_sand:,}")
-                 .add_field("👥 Each Expedition Member Gets", f"**Sand:** {sand_per_participant:,}\n**Melange:** {melange_per_participant:,}\n**Leftover Sand:** {leftover_sand_per_participant:,}")
-                 .add_field("📊 Split Summary", f"**Expedition Pool:** {remaining_sand:,} sand\n**Total Distributed:** {total_distributed:,} sand\n**Remainder:** {remainder_sand:,} sand", inline=False)
-                 .set_footer(f"Split initiated by {interaction.user.display_name} • Refinement: {sand_per_melange} sand = 1 melange", interaction.user.display_avatar.url))
-        
-        await interaction.response.send_message(embed=embed.build())
+        # Show the modal
+        modal = ExpeditionModal()
+        await interaction.response.send_modal(modal)
         
     except Exception as error:
         logger.error(f"Error in split command: {error}")
-        await interaction.response.send_message("❌ An error occurred while calculating the expedition split.", ephemeral=True)
+        await interaction.response.send_message("❌ An error occurred while setting up the expedition.", ephemeral=True)
 
 async def help_command(interaction: discord.Interaction):
     """Show all available commands and their descriptions"""
@@ -519,15 +679,16 @@ async def help_command(interaction: discord.Interaction):
                            "**`/harvest [amount]`**\nLog spice sand harvests (1-10,000). Automatically converts to melange.\n\n"
                            "**`/refinery`**\nView your refinery statistics and melange production progress.\n\n"
                            "**`/ledger`**\nView your complete harvest ledger with payment status.\n\n"
+                           "**`/expedition [id]`**\nView details of a specific expedition.\n\n"
                            "**`/leaderboard [limit]`**\nShow top refiners by melange production (5-25 users).\n\n"
-                           "**`/split [total_sand] [harvester_%]`**\nSplit harvested spice among expedition members. Harvester % is optional.\n\n"
+                                                       "**`/split [total_sand] [harvester_%]`**\nSplit harvested spice among expedition members. Enter participant Discord IDs in the modal. Creates expedition records and tracks melange owed for payout. Harvester % is optional (default: 10%).\n\n"
                            "**`/help`**\nDisplay this help message with all commands.", inline=False)
                  .add_field("⚙️ Guild Admin Commands", 
                            "**`/conversion`**\nView the current refinement rate.\n\n"
                            "**`/payment [user]`**\nProcess payment for a harvester's deposits.\n\n"
                            "**`/payroll`**\nProcess payments for all unpaid harvesters.\n\n"
                            "**`/reset confirm:True`**\nReset all refinery statistics (requires confirmation).", inline=False)
-                 .add_field("📋 Current Settings", f"**Refinement Rate:** {sand_per_melange} sand = 1 melange (set via SAND_PER_MELANGE env var)\n**Default Harvester %:** {os.getenv('DEFAULT_HARVESTER_PERCENTAGE', '25.0')}%", inline=False)
+                                   .add_field("📋 Current Settings", f"**Refinement Rate:** {sand_per_melange} sand = 1 melange (set via SAND_PER_MELANGE env var)\n**Default Harvester %:** {os.getenv('DEFAULT_HARVESTER_PERCENTAGE', '10.0')}%", inline=False)
                  .add_field("💡 Example Usage", 
                            "• `/harvest 250` or `/sand 250` - Harvest 250 spice sand\n"
                            "• `/refinery` or `/status` - Check your refinery status\n"
@@ -535,13 +696,15 @@ async def help_command(interaction: discord.Interaction):
                            "• `/leaderboard 15` or `/top 15` - Show top 15 refiners\n"
                            "• `/payment @username` or `/pay @username` - Pay a specific harvester\n"
                            "• `/payroll` or `/payall` - Pay all harvesters at once\n"
-                           "• `/split 1000 30` - Split 1000 sand, 30% to primary harvester\n"
-                           "• `/split 1000` - Split 1000 sand using default harvester %", inline=False)
+                                                       "• `/split 1000 30` - Split 1000 sand, 30% to primary harvester\n"
+                            "• `/split 1000` - Split 1000 sand using default harvester % (10%)\n"
+                            "• **Note:** You'll be prompted to enter participant Discord IDs in a modal", inline=False)
                  .add_field("🔄 Command Aliases", 
                            "**Harvest:** `/harvest` = `/sand`\n"
                            "**Status:** `/refinery` = `/status`\n"
                            "**Ledger:** `/ledger` = `/deposits`\n"
                            "**Leaderboard:** `/leaderboard` = `/top`\n"
+                           "**Expedition:** `/expedition` = `/exp`\n"
                            "**Help:** `/help` = `/commands`\n"
                            "**Conversion:** `/conversion` = `/rate`\n"
                            "**Payment:** `/payment` = `/pay`\n"
@@ -617,7 +780,12 @@ async def ledger(interaction: discord.Interaction):
         for deposit in deposits_data:
             status = "✅ Paid" if deposit['paid'] else "⏳ Unpaid"
             date_str = f"<t:{int(deposit['created_at'].timestamp())}:R>"
-            ledger_text += f"**{deposit['sand_amount']:,} spice sand** - {status} - {date_str}\n"
+            
+            # Add type and expedition info
+            if deposit.get('type') == 'expedition' and deposit.get('expedition_id'):
+                ledger_text += f"**{deposit['sand_amount']:,} spice sand** (Expedition #{deposit['expedition_id']}) - {status} - {date_str}\n"
+            else:
+                ledger_text += f"**{deposit['sand_amount']:,} spice sand** (Solo) - {status} - {date_str}\n"
             
             if deposit['paid']:
                 total_paid += deposit['sand_amount']
@@ -634,6 +802,42 @@ async def ledger(interaction: discord.Interaction):
     except Exception as error:
         logger.error(f"Error in ledger command: {error}")
         await interaction.response.send_message("❌ An error occurred while fetching your harvest ledger.", ephemeral=True)
+
+async def expedition_details(interaction: discord.Interaction, expedition_id: int):
+    """View details of a specific expedition"""
+    try:
+        # Get expedition details
+        expedition_participants = await get_database().get_expedition_participants(expedition_id)
+        
+        if not expedition_participants:
+            await interaction.response.send_message("❌ Expedition not found or you don't have access to it.", ephemeral=True)
+            return
+        
+        # Get expedition info from first participant
+        first_participant = expedition_participants[0]
+        
+        # Build participant list
+        participant_details = []
+        total_sand = 0
+        
+        for participant in expedition_participants:
+            role = "🏭 Primary Harvester" if participant['is_harvester'] else "👥 Expedition Member"
+            status = "✅ Paid" if participant['sand_amount'] == 0 else "⏳ Unpaid"
+            participant_details.append(f"{role}: **{participant['username']}**\n"
+                                    f"   Sand: {participant['sand_amount']:,} | Melange: {participant['melange_amount']:,} | Leftover: {participant['leftover_sand']:,} - {status}")
+            total_sand += participant['sand_amount']
+        
+        embed = (EmbedBuilder(f"🏜️ Expedition #{expedition_id}", 
+                              description=f"**Total Sand Distributed:** {total_sand:,}\n**Participants:** {len(expedition_participants)}",
+                              color=0xF39C12, timestamp=interaction.created_at)
+                 .add_field("📋 Expedition Participants", "\n\n".join(participant_details), inline=False)
+                 .set_footer(f"Requested by {interaction.user.display_name}", interaction.user.display_avatar.url))
+        
+        await interaction.response.send_message(embed=embed.build())
+        
+    except Exception as error:
+        logger.error(f"Error in expedition_details command: {error}")
+        await interaction.response.send_message("❌ An error occurred while fetching expedition details.", ephemeral=True)
 
 async def payment(interaction: discord.Interaction, user: discord.Member):
     """Process payment for a harvester's deposits (Admin only)"""

@@ -205,7 +205,9 @@ The bot uses **Supabase PostgreSQL** for data persistence with these main tables
 - `/top [limit]` - Alias for leaderboard command
 - `/ledger` - View your complete harvest ledger
 - `/deposits` - Alias for ledger command
-- `/split <total_sand> <participants> [harvester%]` - Calculate spice splits for team operations
+- `/expedition <id>` - View details of a specific expedition
+- `/exp <id>` - Alias for expedition command
+- `/split <total_sand> [harvester%]` - Split spice among expedition members (default: 10% harvester share)
 - `/help` - Display all available commands
 - `/commands` - Alias for help command
 
@@ -228,13 +230,15 @@ The bot uses **Supabase PostgreSQL** for data persistence with these main tables
 
 ### Team Spice Split
 ```
-/split 50000 5 25
+/split 50000 25
 ```
-*Splits 50,000 sand among 5 participants with 25% harvester cut*
+*Splits 50,000 sand with 25% harvester cut*
 
 **Result:**
 - **Harvester gets:** 12,500 sand (250 melange)
-- **Each team member gets:** 7,500 sand (150 melange)
+- **Remaining sand:** 37,500 sand (750 melange)
+
+**Note:** The command now creates expedition records and tracks melange owed for payout. The command initiator automatically becomes the primary harvester. You'll be prompted to enter participant Discord IDs in a modal, and the remaining share will be split equally among all participants.
 
 ## 🏗️ System Architecture
 
@@ -245,9 +249,11 @@ The bot uses **Supabase PostgreSQL** for data persistence with these main tables
 
 ### Data Storage
 - **Supabase PostgreSQL** with asyncpg for persistent data storage
-- **Three-table Schema**: 
+- **Enhanced Schema**: 
   - `users` table: Tracks user IDs, usernames, melange totals, and timestamps
-  - `deposits` table: Records individual spice sand deposits with payment status
+  - `deposits` table: Records individual spice sand deposits with payment status and type (solo/expedition)
+  - `expeditions` table: Tracks expedition details including initiator, total sand, and harvester percentage
+  - `expedition_participants` table: Records individual participant shares and roles in expeditions
   - `settings` table: Stores configurable bot settings like conversion rates
 - **Production-ready database** with automatic backups, scaling, and monitoring
 

@@ -52,8 +52,8 @@ class Database:
                 
                 # Create a single deposit record for the existing total_sand
                 await conn.execute('''
-                    INSERT INTO deposits (user_id, username, sand_amount, paid, created_at)
-                    VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP)
+                    INSERT INTO deposits (user_id, username, sand_amount, type, created_at)
+                    VALUES ($1, $2, $3, 'solo', CURRENT_TIMESTAMP)
                 ''', user_id, username, total_sand)
                 migrated_count += 1
             
@@ -77,6 +77,47 @@ class Database:
             
             return migrated_count
 
+    async def migrate_deposits_to_types(self):
+        """Migrate existing deposits to include type field"""
+        async with self._get_connection() as conn:
+            # Check if type column exists
+            columns = await conn.fetch("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'deposits' AND column_name = 'type'
+            """)
+            
+            if columns:
+                return 0  # Migration already done
+            
+            # Add type column with default value
+            await conn.execute('''
+                ALTER TABLE deposits 
+                ADD COLUMN type TEXT DEFAULT 'solo' CHECK (type IN ('solo', 'expedition'))
+            ''')
+            
+            # Add expedition_id column
+            await conn.execute('''
+                ALTER TABLE deposits 
+                ADD COLUMN expedition_id INTEGER
+            ''')
+            
+            # Update all existing deposits to be 'solo' type
+            result = await conn.execute('''
+                UPDATE deposits 
+                SET type = 'solo' 
+                WHERE type IS NULL
+            ''')
+            
+            # Parse the result to get count of updated rows
+            if result:
+                try:
+                    count_str = result.split()[-1]
+                    return int(count_str)
+                except (ValueError, IndexError):
+                    return 0
+            return 0
+
     async def initialize(self):
         """Initialize database tables"""
         async with self._get_connection() as conn:
@@ -96,9 +137,39 @@ class Database:
                     user_id TEXT NOT NULL,
                     username TEXT NOT NULL,
                     sand_amount INTEGER NOT NULL,
+                    type TEXT DEFAULT 'solo' CHECK (type IN ('solo', 'expedition')),
+                    expedition_id INTEGER,
                     paid BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     paid_at TIMESTAMP WITH TIME ZONE,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id)
+                )
+            ''')
+            
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS expeditions (
+                    id SERIAL PRIMARY KEY,
+                    initiator_id TEXT NOT NULL,
+                    initiator_username TEXT NOT NULL,
+                    total_sand INTEGER NOT NULL,
+                    harvester_percentage FLOAT DEFAULT 0.0,
+                    sand_per_melange INTEGER NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (initiator_id) REFERENCES users (user_id)
+                )
+            ''')
+            
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS expedition_participants (
+                    id SERIAL PRIMARY KEY,
+                    expedition_id INTEGER NOT NULL,
+                    user_id TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    sand_amount INTEGER NOT NULL,
+                    melange_amount INTEGER NOT NULL,
+                    leftover_sand INTEGER NOT NULL,
+                    is_harvester BOOLEAN DEFAULT FALSE,
+                    FOREIGN KEY (expedition_id) REFERENCES expeditions (id),
                     FOREIGN KEY (user_id) REFERENCES users (user_id)
                 )
             ''')
@@ -114,6 +185,11 @@ class Database:
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_deposits_user_id ON deposits (user_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_deposits_created_at ON deposits (created_at)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_deposits_paid ON deposits (paid)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_deposits_type ON deposits (type)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_deposits_expedition_id ON deposits (expedition_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_expeditions_created_at ON expeditions (created_at)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_expedition_participants_expedition_id ON expedition_participants (expedition_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_expedition_participants_user_id ON expedition_participants (user_id)')
             
             # Insert default conversion rate
             await conn.execute(
@@ -121,11 +197,16 @@ class Database:
                 'sand_per_melange', '50'
             )
             
-            # Run migration if needed
+            # Run migrations if needed
             try:
                 migrated_count = await self.migrate_existing_data()
                 if migrated_count > 0:
                     print(f'Migrated {migrated_count} users to new deposits system')
+                
+                # Migrate deposits to include type field
+                deposits_migrated = await self.migrate_deposits_to_types()
+                if deposits_migrated > 0:
+                    print(f'Migrated {deposits_migrated} deposits to include type field')
             except Exception as e:
                 print(f'Migration failed: {e}')
                 # Continue with initialization even if migration fails
@@ -157,7 +238,7 @@ class Database:
                     last_updated = CURRENT_TIMESTAMP
             ''', user_id, username)
 
-    async def add_deposit(self, user_id, username, sand_amount):
+    async def add_deposit(self, user_id, username, sand_amount, deposit_type='solo', expedition_id=None):
         """Add a new sand deposit for a user"""
         async with self._get_connection() as conn:
             # Ensure user exists
@@ -165,9 +246,9 @@ class Database:
             
             # Add deposit record
             await conn.execute('''
-                INSERT INTO deposits (user_id, username, sand_amount, created_at)
-                VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            ''', user_id, username, sand_amount)
+                INSERT INTO deposits (user_id, username, sand_amount, type, expedition_id, created_at)
+                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+            ''', user_id, username, sand_amount, deposit_type, expedition_id)
 
     async def get_user_deposits(self, user_id, include_paid=True):
         """Get all deposits for a user"""
@@ -192,9 +273,101 @@ class Database:
                     'user_id': row[1],
                     'username': row[2],
                     'sand_amount': row[3],
-                    'paid': bool(row[4]),
-                    'created_at': row[5] if row[5] else datetime.now(),
-                    'paid_at': row[6] if row[6] else None
+                    'type': row[4] if len(row) > 4 else 'solo',
+                    'expedition_id': row[5] if len(row) > 5 else None,
+                    'paid': bool(row[6] if len(row) > 6 else row[4]),
+                    'created_at': row[7] if len(row) > 7 else (row[5] if len(row) > 5 else datetime.now()),
+                    'paid_at': row[8] if len(row) > 8 else (row[6] if len(row) > 6 else None)
+                })
+            
+            return deposits
+
+    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange):
+        """Create a new expedition record"""
+        async with self._get_connection() as conn:
+            row = await conn.fetchrow('''
+                INSERT INTO expeditions (initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id
+            ''', initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange)
+            return row[0] if row else None
+
+    async def add_expedition_participant(self, expedition_id, user_id, username, sand_amount, melange_amount, leftover_sand, is_harvester=False):
+        """Add a participant to an expedition"""
+        async with self._get_connection() as conn:
+            await conn.execute('''
+                INSERT INTO expedition_participants (expedition_id, user_id, username, sand_amount, melange_amount, leftover_sand, is_harvester)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ''', expedition_id, user_id, username, sand_amount, melange_amount, leftover_sand, is_harvester)
+
+    async def add_expedition_deposit(self, user_id, username, sand_amount, expedition_id):
+        """Add a deposit record for an expedition participant"""
+        async with self._get_connection() as conn:
+            # Ensure user exists
+            await self.upsert_user(user_id, username)
+            
+            # Add deposit record with expedition type
+            await conn.execute('''
+                INSERT INTO deposits (user_id, username, sand_amount, type, expedition_id, created_at)
+                VALUES ($1, $2, $3, 'expedition', $4, CURRENT_TIMESTAMP)
+            ''', user_id, username, sand_amount, expedition_id)
+
+    async def get_expedition_participants(self, expedition_id):
+        """Get all participants for a specific expedition"""
+        async with self._get_connection() as conn:
+            rows = await conn.fetch('''
+                SELECT * FROM expedition_participants 
+                WHERE expedition_id = $1
+                ORDER BY is_harvester DESC, username ASC
+            ''', expedition_id)
+            
+            participants = []
+            for row in rows:
+                participants.append({
+                    'id': row[0],
+                    'expedition_id': row[1],
+                    'user_id': row[2],
+                    'username': row[3],
+                    'sand_amount': row[4],
+                    'melange_amount': row[5],
+                    'leftover_sand': row[6],
+                    'is_harvester': bool(row[7])
+                })
+            
+            return participants
+
+    async def get_user_expedition_deposits(self, user_id, include_paid=True):
+        """Get expedition deposits for a specific user"""
+        async with self._get_connection() as conn:
+            query = '''
+                SELECT d.*, e.initiator_username, e.total_sand as expedition_total
+                FROM deposits d
+                LEFT JOIN expeditions e ON d.expedition_id = e.id
+                WHERE d.user_id = $1 AND d.type = 'expedition'
+            '''
+            params = [user_id]
+            
+            if not include_paid:
+                query += ' AND d.paid = FALSE'
+            
+            query += ' ORDER BY d.created_at DESC'
+            
+            rows = await conn.fetch(query, *params)
+            
+            deposits = []
+            for row in rows:
+                deposits.append({
+                    'id': row[0],
+                    'user_id': row[1],
+                    'username': row[2],
+                    'sand_amount': row[3],
+                    'type': row[4],
+                    'expedition_id': row[5],
+                    'paid': bool(row[6]),
+                    'created_at': row[7] if row[7] else datetime.now(),
+                    'paid_at': row[8] if row[8] else None,
+                    'initiator_username': row[9] if len(row) > 9 else None,
+                    'expedition_total': row[10] if len(row) > 10 else None
                 })
             
             return deposits
@@ -334,10 +507,12 @@ class Database:
                     'user_id': row[1],
                     'username': row[2],
                     'sand_amount': row[3],
-                    'paid': bool(row[4]),
-                    'created_at': row[5] if row[5] else datetime.now(),
-                    'paid_at': row[6] if row[6] else None,
-                    'total_melange': row[7]
+                    'type': row[4] if len(row) > 4 else 'solo',
+                    'expedition_id': row[5] if len(row) > 5 else None,
+                    'paid': bool(row[6] if len(row) > 6 else row[4]),
+                    'created_at': row[7] if len(row) > 7 else (row[5] if len(row) > 5 else datetime.now()),
+                    'paid_at': row[8] if len(row) > 8 else (row[6] if len(row) > 6 else None),
+                    'total_melange': row[9] if len(row) > 9 else 0
                 })
             
             return deposits
