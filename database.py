@@ -1,4 +1,5 @@
 import asyncpg
+import asyncio
 import os
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
@@ -8,23 +9,47 @@ class Database:
         self.database_url = database_url or os.getenv('DATABASE_URL')
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable is required")
+        
+        # Connection pool settings for better reliability
+        self.max_retries = 3
+        self.retry_delay = 1.0  # seconds
 
     @asynccontextmanager
     async def _get_connection(self):
-        """Context manager for database connections"""
-        # Configure connection for Supabase compatibility
-        conn = await asyncpg.connect(
-            self.database_url,
-            statement_cache_size=0,  # Disable prepared statements for pgbouncer compatibility
-            command_timeout=60,      # Set command timeout
-            server_settings={
-                'application_name': 'spice_tracker_bot'
-            }
-        )
-        try:
-            yield conn
-        finally:
-            await conn.close()
+        """Context manager for database connections with retry logic"""
+        conn = None
+        last_error = None
+        
+        for attempt in range(self.max_retries):
+            try:
+                # Configure connection for Supabase compatibility
+                conn = await asyncpg.connect(
+                    self.database_url,
+                    statement_cache_size=0,  # Disable prepared statements for pgbouncer compatibility
+                    command_timeout=60,      # Set command timeout
+                    server_settings={
+                        'application_name': 'spice_tracker_bot'
+                    }
+                )
+                yield conn
+                break  # Success, exit retry loop
+            except Exception as e:
+                last_error = e
+                if attempt < self.max_retries - 1:
+                    # Wait before retrying
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
+                    continue
+                else:
+                    # Final attempt failed, re-raise the error
+                    raise last_error
+            finally:
+                if conn:
+                    try:
+                        # Add timeout to connection close to prevent hanging
+                        await asyncio.wait_for(conn.close(), timeout=5.0)
+                    except (asyncio.TimeoutError, Exception):
+                        # If close times out or fails, just log it and continue
+                        pass  # Connection will be cleaned up by the garbage collector
 
     async def migrate_existing_data(self):
         """Migrate existing users with total_sand to the new deposits system"""
