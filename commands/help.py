@@ -9,7 +9,7 @@ COMMAND_METADATA = {
 }
 
 import os
-from utils.embed_utils import build_info_embed
+from utils.embed_utils import build_status_embed
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_sand_per_melange, send_response
 
@@ -53,9 +53,9 @@ async def help_command(interaction, use_followup: bool = True):
                               "**Payroll:** `/payroll` = `/payall`"
     }
     
-    embed = build_info_embed(
+    embed = build_status_embed(
         title="🏜️ Spice Refinery Commands",
-        info_message="Track your spice sand harvests and melange production in the Dune: Awakening universe!",
+        description="Track your spice sand harvests and melange production in the Dune: Awakening universe!",
         color=0xF39C12,
         fields=fields,
         footer="Spice Refinery Bot - Dune: Awakening Guild Resource Tracker",

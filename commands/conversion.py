@@ -9,7 +9,7 @@ COMMAND_METADATA = {
 }
 
 import time
-from utils.embed_utils import build_info_embed
+from utils.embed_utils import build_status_embed
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_sand_per_melange, send_response
 from utils.logger import logger
@@ -28,9 +28,10 @@ async def conversion(interaction, use_followup: bool = True):
             "⚠️ Important Note": "The conversion rate is set via environment variables and cannot be changed through commands. Contact an administrator to modify the SAND_PER_MELANGE environment variable."
         }
         
-        embed = build_info_embed(
+        embed = build_status_embed(
             title="⚙️ Refinement Rate Information",
-            info_message="Current spice sand to melange conversion rate",
+            description="Current spice sand to melange conversion rate",
+            color=0x3498DB,
             fields=fields,
             footer=f"Requested by {interaction.user.display_name}",
             timestamp=interaction.created_at

@@ -10,7 +10,7 @@ COMMAND_METADATA = {
 
 import time
 from utils.database_utils import timed_database_operation
-from utils.embed_utils import build_info_embed, build_status_embed
+from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, send_response
@@ -29,9 +29,9 @@ async def ledger(interaction, use_followup: bool = True):
     )
     
     if not deposits_data:
-        embed = build_info_embed(
+        embed = build_status_embed(
             title="📋 Spice Harvest Ledger",
-            info_message="🏜️ You haven't harvested any spice sand yet! Use `/harvest` to start tracking your harvests.",
+            description="🏜️ You haven't harvested any spice sand yet! Use `/harvest` to start tracking your harvests.",
             color=0x95A5A6,
             footer=f"Requested by {interaction.user.display_name}",
             timestamp=interaction.created_at

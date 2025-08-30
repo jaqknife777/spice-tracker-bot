@@ -93,12 +93,14 @@ class TestUtilityFunctions:
         from utils.embed_builder import EmbedBuilder
         
         # Test basic creation
-        embed = EmbedBuilder("Test Title")
+        embed = EmbedBuilder("Test Title", description="Test Description")
         assert embed.embed.title == "Test Title"
+        assert embed.embed.description == "Test Description"
         
         # Test building
         discord_embed = embed.build()
         assert discord_embed.title == "Test Title"
+        assert discord_embed.description == "Test Description"
     
     def test_logger_import(self):
         """Test that the logger can be imported."""

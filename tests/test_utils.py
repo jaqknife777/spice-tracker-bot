@@ -13,10 +13,9 @@ class TestEmbedBuilder:
     
     def test_embed_builder_creation(self):
         """Test creating a basic embed."""
-        embed = EmbedBuilder("Test Title", "Test Description")
-        
-        assert embed.title == "Test Title"
-        assert embed.description == "Test Description"
+        embed = EmbedBuilder("Test Title", description="Test Description")
+        assert embed.embed.title == "Test Title"
+        assert embed.embed.description == "Test Description"
     
     def test_embed_builder_with_fields(self):
         """Test adding fields to embed."""
@@ -52,7 +51,8 @@ class TestHelpers:
         """Test send_response with interaction."""
         await send_response(mock_interaction, "Test message", use_followup=False)
         
-        mock_interaction.response.send.assert_called_once_with("Test message", ephemeral=False)
+        # When use_followup=False, it calls channel.send, not response.send
+        mock_interaction.channel.send.assert_called_once_with("Test message")
     
     @pytest.mark.asyncio
     async def test_send_response_followup(self, mock_interaction):
@@ -67,7 +67,8 @@ class TestHelpers:
         embed = EmbedBuilder("Test Title").build()
         await send_response(mock_interaction, embed=embed, use_followup=False)
         
-        mock_interaction.response.send.assert_called_once_with(embed=embed, ephemeral=False)
+        # When use_followup=False, it calls channel.send, not response.send
+        mock_interaction.channel.send.assert_called_once_with(embed=embed)
 
 class TestDatabaseUtils:
     """Test database utility functions."""
@@ -80,26 +81,45 @@ class TestDatabaseUtils:
         
         result = await timed_database_operation("test_op", test_operation)
         
-        assert result == "success"
+        # The function returns a tuple (result, execution_time)
+        assert isinstance(result, tuple)
+        assert result[0] == "success"
+        assert isinstance(result[1], (int, float))
     
     @pytest.mark.asyncio
     async def test_validate_user_exists(self, mock_database):
         """Test user validation."""
+        # First call returns None (user doesn't exist), second call returns the user
+        mock_database.get_user.side_effect = [None, {"user_id": "123", "username": "TestUser"}]
         mock_database.upsert_user.return_value = {"user_id": "123", "username": "TestUser"}
         
         result = await validate_user_exists(mock_database, "123", "TestUser")
         
         assert result["user_id"] == "123"
         mock_database.upsert_user.assert_called_once_with("123", "TestUser")
+        assert mock_database.get_user.call_count == 2  # Called twice: once to check, once after creation
     
     @pytest.mark.asyncio
     async def test_get_user_stats(self, mock_database):
         """Test getting user statistics."""
         result = await get_user_stats(mock_database, "123")
         
+        # Check that the function returns the expected structure
         assert "total_sand" in result
-        assert "total_melange" in result
-        mock_database.get_user_stats.assert_called_once_with("123")
+        assert "paid_sand" in result
+        assert "user" in result
+        assert "timing" in result
+        assert "total_time" in result
+        
+        # Check the actual values
+        assert result["total_sand"] == 1000
+        assert result["paid_sand"] == 500
+        assert result["user"]["user_id"] == "123"
+        
+        # Verify the database methods were called
+        mock_database.get_user.assert_called_once_with("123")
+        mock_database.get_user_total_sand.assert_called_once_with("123")
+        mock_database.get_user_paid_sand.assert_called_once_with("123")
 
 class TestDecorators:
     """Test decorator functions."""
@@ -114,13 +134,14 @@ class TestDecorators:
         result = await test_command(mock_interaction, False)
         assert result == "success"
     
-    def test_monitor_performance(self):
+    @pytest.mark.asyncio
+    async def test_monitor_performance(self):
         """Test performance monitoring decorator."""
         @monitor_performance("test_operation")
-        def test_function():
+        async def test_function():
             return "success"
         
-        result = test_function()
+        result = await test_function()
         assert result == "success"
 
 class TestCommandMetadata:

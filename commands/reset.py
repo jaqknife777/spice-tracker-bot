@@ -11,7 +11,7 @@ COMMAND_METADATA = {
 
 import time
 from utils.database_utils import timed_database_operation
-from utils.embed_utils import build_warning_embed
+from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, send_response
@@ -30,9 +30,10 @@ async def reset(interaction, confirm: bool, use_followup: bool = True):
             return
         
         if not confirm:
-            embed = build_warning_embed(
+            embed = build_status_embed(
                 title="⚠️ Reset Cancelled",
-                warning_message="You must set the `confirm` parameter to `True` to proceed with the reset.",
+                description="You must set the `confirm` parameter to `True` to proceed with the reset.",
+                color=0xF39C12,
                 fields={"🔄 How to Reset": "Use `/reset confirm:True` to confirm the reset."},
                 timestamp=interaction.created_at
             )
@@ -51,9 +52,10 @@ async def reset(interaction, confirm: bool, use_followup: bool = True):
             "✅ What Remains": "Refinement rates and bot settings are preserved."
         }
         
-        embed = build_warning_embed(
+        embed = build_status_embed(
             title="🔄 Refinery Reset Complete",
-            warning_message="**All refinery statistics have been permanently deleted!**",
+            description="**All refinery statistics have been permanently deleted!**",
+            color=0xF39C12,
             fields=fields,
             footer=f"Reset performed by {interaction.user.display_name}",
             timestamp=interaction.created_at

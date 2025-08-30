@@ -11,7 +11,7 @@ COMMAND_METADATA = {
 
 import time
 from utils.database_utils import timed_database_operation
-from utils.embed_utils import build_info_embed, build_success_embed
+from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, send_response
@@ -35,9 +35,9 @@ async def payment(interaction, user, use_followup: bool = True):
     )
     
     if not unpaid_deposits:
-        embed = build_info_embed(
+        embed = build_status_embed(
             title="💰 Payment Status",
-            info_message=f"🏜️ **{user.display_name}** has no unpaid harvests to process.",
+            description=f"🏜️ **{user.display_name}** has no unpaid harvests to process.",
             color=0x95A5A6,
             footer=f"Requested by {interaction.user.display_name}",
             timestamp=interaction.created_at
@@ -59,9 +59,10 @@ async def payment(interaction, user, use_followup: bool = True):
         "📊 Payment Summary": f"**Total Spice Sand Paid:** {total_paid:,}\n**Harvests Processed:** {len(unpaid_deposits)}"
     }
     
-    embed = build_success_embed(
+    embed = build_status_embed(
         title="💰 Payment Processed",
-        success_message=f"**{user.display_name}** has been paid for all harvests!",
+        description=f"**{user.display_name}** has been paid for all harvests!",
+        color=0x27AE60,
         fields=fields,
         footer=f"Payment processed by {interaction.user.display_name}",
         timestamp=interaction.created_at

@@ -6,6 +6,7 @@ import time
 import asyncio
 from utils.logger import logger
 from utils.helpers import send_response
+import inspect
 
 
 def handle_interaction_expiration(func):
@@ -60,7 +61,10 @@ def handle_interaction_expiration(func):
                 raise defer_error
         
         # Add use_followup to kwargs so the function can use it
-        kwargs['use_followup'] = use_followup
+        # But only if the function doesn't already have it as a parameter
+        sig = inspect.signature(func)
+        if 'use_followup' not in sig.parameters:
+            kwargs['use_followup'] = use_followup
         
         try:
             function_start = time.time()
