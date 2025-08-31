@@ -143,6 +143,36 @@ class Database:
                     return 0
             return 0
 
+    async def migrate_expeditions_to_types(self):
+        """Migrate existing expeditions to include expedition_type field"""
+        async with self._get_connection() as conn:
+            try:
+                # Check if expedition_type column exists
+                column_exists = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'expeditions' AND column_name = 'expedition_type'
+                    )
+                """)
+                
+                if column_exists:
+                    # Column already exists, no migration needed
+                    return 0
+                
+                # Add expedition_type column
+                await conn.execute('ALTER TABLE expeditions ADD COLUMN expedition_type TEXT DEFAULT \'crawler\'')
+                
+                # Update existing expeditions to be 'crawler' type (default)
+                await conn.execute('UPDATE expeditions SET expedition_type = \'crawler\' WHERE expedition_type IS NULL')
+                
+                # Add constraints
+                await conn.execute('ALTER TABLE expeditions ADD CONSTRAINT check_expedition_type CHECK (expedition_type IN (\'solo\', \'crawler\', \'harvester\'))')
+                
+                return 1  # Migration completed
+            except Exception as e:
+                print(f'Error migrating expeditions to types: {e}')
+                return 0
+
     async def initialize(self):
         """Initialize database tables"""
         async with self._get_connection() as conn:
@@ -179,6 +209,7 @@ class Database:
                     total_sand INTEGER NOT NULL,
                     harvester_percentage FLOAT DEFAULT 0.0,
                     sand_per_melange INTEGER NOT NULL,
+                    expedition_type TEXT DEFAULT 'crawler' CHECK (expedition_type IN ('solo', 'crawler', 'harvester')),
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (initiator_id) REFERENCES users (user_id)
                 )
@@ -232,6 +263,11 @@ class Database:
                 deposits_migrated = await self.migrate_deposits_to_types()
                 if deposits_migrated > 0:
                     print(f'Migrated {deposits_migrated} deposits to include type field')
+                
+                # Migrate expeditions to include expedition_type field
+                expeditions_migrated = await self.migrate_expeditions_to_types()
+                if expeditions_migrated > 0:
+                    print(f'Migrated {expeditions_migrated} expeditions to include type field')
             except Exception as e:
                 print(f'Migration failed: {e}')
                 # Continue with initialization even if migration fails
@@ -307,14 +343,14 @@ class Database:
             
             return deposits
 
-    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange):
+    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange, expedition_type='crawler'):
         """Create a new expedition record"""
         async with self._get_connection() as conn:
             row = await conn.fetchrow('''
-                INSERT INTO expeditions (initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO expeditions (initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange, expedition_type)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id
-            ''', initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange)
+            ''', initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange, expedition_type)
             return row[0] if row else None
 
     async def add_expedition_participant(self, expedition_id, user_id, username, sand_amount, melange_amount, leftover_sand, is_harvester=False):
@@ -336,6 +372,26 @@ class Database:
                 INSERT INTO deposits (user_id, username, sand_amount, type, expedition_id, created_at)
                 VALUES ($1, $2, $3, 'expedition', $4, CURRENT_TIMESTAMP)
             ''', user_id, username, sand_amount, expedition_id)
+
+    async def get_expedition(self, expedition_id):
+        """Get expedition details by ID"""
+        async with self._get_connection() as conn:
+            row = await conn.fetchrow('''
+                SELECT * FROM expeditions WHERE id = $1
+            ''', expedition_id)
+            
+            if row:
+                return {
+                    'id': row[0],
+                    'initiator_id': row[1],
+                    'initiator_username': row[2],
+                    'total_sand': row[3],
+                    'harvester_percentage': row[4],
+                    'sand_per_melange': row[5],
+                    'expedition_type': row[6] if len(row) > 6 else 'crawler',
+                    'created_at': row[7] if len(row) > 7 else None
+                }
+            return None
 
     async def get_expedition_participants(self, expedition_id):
         """Get all participants for a specific expedition"""
