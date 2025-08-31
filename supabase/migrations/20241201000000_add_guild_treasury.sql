@@ -35,10 +35,10 @@ CREATE INDEX IF NOT EXISTS idx_guild_transactions_type ON guild_transactions (tr
 CREATE INDEX IF NOT EXISTS idx_guild_transactions_created_at ON guild_transactions (created_at);
 CREATE INDEX IF NOT EXISTS idx_guild_transactions_expedition_id ON guild_transactions (expedition_id);
 
--- Insert initial guild treasury record (will be updated by bot)
+-- Insert initial guild treasury record
 INSERT INTO guild_treasury (guild_name, total_sand, total_melange) 
-VALUES ('Default Guild', 0, 0) 
-ON CONFLICT DO NOTHING;
+SELECT 'Guild Treasury', 0, 0
+WHERE NOT EXISTS (SELECT 1 FROM guild_treasury);
 
 -- Update existing expeditions to have default guild cut
 UPDATE expeditions 

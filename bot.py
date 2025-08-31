@@ -51,36 +51,18 @@ async def on_ready():
         
         print("🔄 Starting bot initialization...")
         
-        # Initialize database
+        # Test database connectivity
         try:
-            print("🗄️ Initializing database...")
+            print("🔗 Testing database connection...")
             db_init_start = time.time()
             await get_database().initialize()
             db_init_time = time.time() - db_init_start
-            logger.bot_event("Database initialized successfully", db_init_time=f"{db_init_time:.3f}s")
-            print(f'✅ Database initialized successfully in {db_init_time:.3f}s.')
-            
-            # Clean up old deposits (older than 30 days)
-            try:
-                print("🧹 Cleaning up old deposits...")
-                cleanup_start = time.time()
-                cleaned_count = await get_database().cleanup_old_deposits(30)
-                cleanup_time = time.time() - cleanup_start
-                if cleaned_count > 0:
-                    logger.bot_event(f"Cleaned up {cleaned_count} old paid deposits", cleanup_time=f"{cleanup_time:.3f}s")
-                    print(f'✅ Cleaned up {cleaned_count} old paid deposits in {cleanup_time:.3f}s.')
-                else:
-                    logger.bot_event("No old deposits to clean up", cleanup_time=f"{cleanup_time:.3f}s")
-                    print(f"✅ No old deposits to clean up in {cleanup_time:.3f}s.")
-            except Exception as cleanup_error:
-                cleanup_time = time.time() - cleanup_start
-                logger.bot_event(f"Failed to clean up old deposits: {cleanup_error}", cleanup_time=f"{cleanup_time:.3f}s")
-                print(f'⚠️ Failed to clean up old deposits in {cleanup_time:.3f}s: {cleanup_error}')
+            logger.bot_event("Database connection verified", db_init_time=f"{db_init_time:.3f}s")
                 
         except Exception as error:
             db_init_time = time.time() - db_init_start
-            logger.bot_event(f"Failed to initialize database: {error}", db_init_time=f"{db_init_time:.3f}s")
-            print(f'❌ Failed to initialize database in {db_init_time:.3f}s: {error}')
+            logger.bot_event(f"Database connection failed: {error}", db_init_time=f"{db_init_time:.3f}s")
+            print(f'❌ Database connection failed in {db_init_time:.3f}s: {error}')
             print(f'❌ Error type: {type(error).__name__}')
             import traceback
             print(f'❌ Full traceback: {traceback.format_exc()}')
