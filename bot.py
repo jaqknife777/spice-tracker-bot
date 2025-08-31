@@ -117,7 +117,7 @@ async def on_ready():
 # Register commands with the bot's command tree
 def register_commands():
     """Register all commands explicitly with their exact signatures"""
-    from commands import harvest, refinery, leaderboard, conversion, split, help, reset, ledger, expedition, payment, payroll, guild_treasury, guild_withdraw
+    from commands import harvest, refinery, leaderboard, conversion, split, help, reset, ledger, expedition, payment, payroll, guild_treasury, guild_withdraw, pending
     
     # Harvest command
     @bot.tree.command(name="harvest", description="Log spice sand harvests and calculate melange conversion")
@@ -197,6 +197,11 @@ def register_commands():
     )
     async def guild_withdraw_cmd(interaction: discord.Interaction, user: discord.Member, amount: int):  # noqa: F841
         await guild_withdraw(interaction, user, amount, True)
+    
+    # Pending command
+    @bot.tree.command(name="pending", description="View all users with pending melange payments (Admin only)")
+    async def pending_cmd(interaction: discord.Interaction):  # noqa: F841
+        await pending(interaction, True)
     
     print(f"✅ Registered all commands explicitly")
 

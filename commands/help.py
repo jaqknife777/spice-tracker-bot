@@ -28,9 +28,12 @@ async def help(interaction, use_followup: bool = True):
                                  "**`/leaderboard [limit]`**\nShow top refiners by melange production (5-25 users).\n\n"
                                  "**`/split [total_sand] [@users]`**\nSplit harvested spice equally among mentioned users. Mention users with @ symbol. Include @yourself if you want to be part of the split. Creates expedition records and tracks melange owed for payout.\n\n"
                                  "**`/help`**\nDisplay this help message with all commands.",
-        "⚙️ Guild Admin Commands": "**`/conversion`**\nView the current refinement rate.\n\n"
+        "⚙️ Guild Admin Commands": "**`/pending`**\nView all users with pending melange payments and amounts owed.\n\n"
                                    "**`/payment [user]`**\nProcess payment for a harvester's deposits.\n\n"
                                    "**`/payroll`**\nProcess payments for all unpaid harvesters.\n\n"
+                                   "**`/guild_treasury`**\nView guild treasury balance and melange reserves.\n\n"
+                                   "**`/guild_withdraw [user] [amount]`**\nWithdraw sand from guild treasury to give to a user.\n\n"
+                                   "**`/conversion`**\nView the current refinement rate.\n\n"
                                    "**`/reset confirm:True`**\nReset all refinery statistics (requires confirmation).",
         "📋 Current Settings": f"**Refinement Rate:** {sand_per_melange} sand = 1 melange (set via SAND_PER_MELANGE env var)",
         "💡 Example Usage": "• `/harvest 250` or `/sand 250` - Harvest 250 spice sand\n"
