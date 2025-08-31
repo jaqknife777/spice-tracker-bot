@@ -59,10 +59,9 @@ CREATE TABLE settings (
     value TEXT NOT NULL
 );
 
--- Guild treasury table - tracks guild's accumulated resources
+-- Guild treasury table - tracks this guild's accumulated resources
 CREATE TABLE guild_treasury (
     id SERIAL PRIMARY KEY,
-    guild_name TEXT NOT NULL,
     total_sand INTEGER DEFAULT 0,
     total_melange INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -106,8 +105,8 @@ CREATE INDEX idx_guild_transactions_expedition_id ON guild_transactions (expedit
 INSERT INTO settings (key, value) VALUES ('sand_per_melange', '50');
 
 -- Initial guild treasury record
-INSERT INTO guild_treasury (guild_name, total_sand, total_melange) 
-VALUES ('Guild Treasury', 0, 0);
+INSERT INTO guild_treasury (total_sand, total_melange) 
+VALUES (0, 0);
 
 -- Useful views for common queries
 
@@ -178,7 +177,7 @@ COMMENT ON TABLE deposits IS 'Individual spice sand deposits with payment status
 COMMENT ON TABLE expeditions IS 'Group expeditions with guild cuts';
 COMMENT ON TABLE expedition_participants IS 'Individual participation in expeditions';
 COMMENT ON TABLE settings IS 'Bot configuration settings';
-COMMENT ON TABLE guild_treasury IS 'Guild resource accumulation';
+COMMENT ON TABLE guild_treasury IS 'This guild''s resource accumulation (per-guild database)';
 COMMENT ON TABLE guild_transactions IS 'Audit trail for guild treasury operations';
 COMMENT ON VIEW user_stats IS 'Comprehensive user statistics';
 COMMENT ON VIEW leaderboard IS 'User rankings by melange production';

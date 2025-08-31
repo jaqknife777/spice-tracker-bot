@@ -253,9 +253,9 @@ class Database:
                 else:
                     # Create initial treasury record if none exists
                     await conn.execute('''
-                        INSERT INTO guild_treasury (guild_name, total_sand, total_melange)
-                        VALUES ($1, $2, $3)
-                    ''', 'Guild Treasury', 0, 0)
+                        INSERT INTO guild_treasury (total_sand, total_melange)
+                        VALUES ($1, $2)
+                    ''', 0, 0)
                     treasury = {'total_sand': 0, 'total_melange': 0, 'created_at': None, 'last_updated': None}
                 
                 await self._log_operation("select", "guild_treasury", start_time, success=True)
@@ -269,25 +269,16 @@ class Database:
         start_time = time.time()
         async with self._get_connection() as conn:
             try:
-                # Update or insert guild treasury
-                await conn.execute('''
-                    INSERT INTO guild_treasury (guild_name, total_sand, total_melange, last_updated)
-                    VALUES ('Guild Treasury', $1, $2, CURRENT_TIMESTAMP)
-                    ON CONFLICT (id) DO UPDATE SET
-                        total_sand = guild_treasury.total_sand + $1,
-                        total_melange = guild_treasury.total_melange + $2,
-                        last_updated = CURRENT_TIMESTAMP
-                    WHERE guild_treasury.id = (SELECT MAX(id) FROM guild_treasury)
-                ''', sand_amount, melange_amount)
-                
-                # If no existing record, do a simpler insert
+                # Check if treasury record exists
                 result = await conn.fetchrow('SELECT COUNT(*) as count FROM guild_treasury')
                 if result['count'] == 0:
+                    # Create initial record with amounts
                     await conn.execute('''
-                        INSERT INTO guild_treasury (guild_name, total_sand, total_melange)
-                        VALUES ('Guild Treasury', $1, $2)
+                        INSERT INTO guild_treasury (total_sand, total_melange)
+                        VALUES ($1, $2)
                     ''', sand_amount, melange_amount)
                 else:
+                    # Update existing record
                     await conn.execute('''
                         UPDATE guild_treasury 
                         SET total_sand = total_sand + $1,
