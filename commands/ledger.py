@@ -69,9 +69,9 @@ async def ledger(interaction, use_followup: bool = True):
         timestamp=interaction.created_at
     )
     
-    # Send response using helper function
+    # Send response using helper function (ephemeral for privacy)
     response_start = time.time()
-    await send_response(interaction, embed=embed.build(), use_followup=use_followup)
+    await send_response(interaction, embed=embed.build(), use_followup=use_followup, ephemeral=True)
     response_time = time.time() - response_start
     
     # Log performance metrics using utility function
