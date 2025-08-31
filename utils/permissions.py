@@ -1,9 +1,9 @@
 """
 Permission utilities for the Spice Tracker Bot.
-Currently minimal implementation - expand as needed for future role-based permissions.
 """
 
 import os
+import discord
 from typing import List
 
 def _parse_role_ids(env_var: str) -> List[int]:
@@ -29,5 +29,38 @@ def get_allowed_role_ids() -> List[int]:
     """Get allowed role IDs from environment variable"""
     return _parse_role_ids(os.getenv('ALLOWED_ROLE_IDS', ''))
 
-# Note: Additional permission functions can be added here as needed
-# Current implementation is minimal since role-based permissions are not yet used
+def is_admin(interaction: discord.Interaction) -> bool:
+    """
+    Check if user has admin permissions based on ADMIN_ROLE_IDS environment variable.
+    Returns True only if user has one of the specified admin role IDs.
+    """
+    admin_role_ids = get_admin_role_ids()
+    
+    # If no admin roles configured, deny access (no admins)
+    if not admin_role_ids:
+        return False
+    
+    # Check if user has any of the specified admin roles
+    if hasattr(interaction.user, 'roles'):
+        user_role_ids = [role.id for role in interaction.user.roles]
+        return any(role_id in user_role_ids for role_id in admin_role_ids)
+    
+    return False
+
+def is_allowed_user(interaction: discord.Interaction) -> bool:
+    """
+    Check if user is allowed to use the bot.
+    Returns True if no role restrictions OR user has allowed roles.
+    """
+    allowed_role_ids = get_allowed_role_ids()
+    
+    # If no role restrictions, allow all users
+    if not allowed_role_ids:
+        return True
+    
+    # Check if user has any allowed roles
+    if hasattr(interaction.user, 'roles'):
+        user_role_ids = [role.id for role in interaction.user.roles]
+        return any(role_id in user_role_ids for role_id in allowed_role_ids)
+    
+    return False

@@ -14,6 +14,7 @@ from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, send_response
+from utils.permissions import is_admin
 
 
 @handle_interaction_expiration
@@ -22,8 +23,8 @@ async def payroll(interaction, use_followup: bool = True):
     command_start = time.time()
     
     # Check if user has admin permissions
-    if not interaction.user.guild_permissions.administrator:
-        await send_response(interaction, "❌ You need administrator permissions to use this command.", use_followup=use_followup, ephemeral=True)
+    if not is_admin(interaction):
+        await send_response(interaction, "❌ You need an admin role to use this command. Contact a server administrator.", use_followup=use_followup, ephemeral=True)
         return
     
     # Get all unpaid deposits using utility function
