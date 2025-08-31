@@ -62,4 +62,4 @@ async def help(interaction, use_followup: bool = True):
         timestamp=interaction.created_at
     )
     
-    await send_response(interaction, embed=embed.build(), use_followup=use_followup)
+    await send_response(interaction, embed=embed.build(), use_followup=use_followup, ephemeral=True)
