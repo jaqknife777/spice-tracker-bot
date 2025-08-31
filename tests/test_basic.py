@@ -52,7 +52,7 @@ class TestCommandDiscovery:
         expected_commands = {
             'harvest', 'refinery', 'leaderboard', 'conversion', 
             'split', 'help', 'reset', 'ledger', 'expedition', 
-            'payment', 'payroll'
+            'payment', 'payroll', 'guild_treasury', 'guild_withdraw'
         }
         
         discovered_commands = set(COMMAND_METADATA.keys())
