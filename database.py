@@ -432,7 +432,7 @@ class Database:
                                         user_id=user_id, include_paid=include_paid, error=str(e))
                 raise e
 
-    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange):
+    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage=0.0, sand_per_melange=None):
         """Create a new expedition record"""
         start_time = time.time()
         async with self._get_connection() as conn:

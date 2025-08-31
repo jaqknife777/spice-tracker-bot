@@ -188,8 +188,8 @@ def register_commands():
                     await command_data['function'](interaction, limit)
             elif command_name == 'split':
                 @bot.tree.command(name=command_name, description=command_data['description'])
-                async def wrapper(interaction: discord.Interaction, total_sand: int, harvester_percentage: float = None):
-                    await command_data['function'](interaction, total_sand, harvester_percentage)
+                async def wrapper(interaction: discord.Interaction, total_sand: int, users: str):
+                    await command_data['function'](interaction, total_sand, users)
             elif command_name == 'reset':
                 @bot.tree.command(name=command_name, description=command_data['description'])
                 async def wrapper(interaction: discord.Interaction, confirm: bool):
@@ -231,8 +231,8 @@ def register_commands():
                         await command_data['function'](interaction, limit)
                 elif command_name == 'split':
                     @bot.tree.command(name=alias, description=command_data['description'])
-                    async def alias_wrapper(interaction: discord.Interaction, total_sand: int, harvester_percentage: float = None):
-                        await command_data['function'](interaction, total_sand, harvester_percentage)
+                    async def alias_wrapper(interaction: discord.Interaction, total_sand: int, users: str):
+                        await command_data['function'](interaction, total_sand, users)
                 elif command_name == 'reset':
                     @bot.tree.command(name=alias, description=command_data['description'])
                     async def alias_wrapper(interaction: discord.Interaction, confirm: bool):
