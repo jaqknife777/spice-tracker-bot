@@ -1,18 +1,20 @@
 """
-Split command for dividing harvested spice sand among expedition members.
+Split command for dividing harvested spice sand among expedition members with guild cut and individual percentages.
 """
 
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],
-    'description': "Split harvested spice sand among expedition members",
+    'description': "Split harvested spice sand among expedition members with guild cut and individual percentages",
     'params': {
         'total_sand': "Total spice sand collected to split",
-        'users': "List of Discord users to split with (use @mentions)"
+        'users': "Users and percentages: '@user1 50 @user2 @user3' (users without % split equally)",
+        'guild': "Guild cut percentage (default: 10)"
     }
 }
 
-import os
+import re
+import traceback
 import discord
 from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, get_sand_per_melange, send_response
@@ -20,162 +22,196 @@ from utils.logger import logger
 
 
 @handle_interaction_expiration
-async def split(interaction, total_sand: int, users: str, use_followup: bool = True):
-    """Split harvested spice sand among expedition members"""
+async def split(interaction, total_sand: int, users: str, guild: int = 10, use_followup: bool = True):
+    """Split harvested spice sand among expedition members with guild cut and individual percentages"""
+    
     try:
-        # Validate total_sand input
+        # Validate inputs
         if total_sand < 1:
             await send_response(interaction, "❌ Total spice sand must be at least 1.", use_followup=use_followup, ephemeral=True)
             return
         
-        # Parse user mentions from the users string
-        # Extract user IDs from mentions like <@123456789012345678>
-        import re
-        user_id_pattern = r'<@!?(\d+)>'
-        user_ids = re.findall(user_id_pattern, users)
+        if not 0 <= guild <= 100:
+            await send_response(interaction, "❌ Guild cut percentage must be between 0 and 100.", use_followup=use_followup, ephemeral=True)
+            return
         
-        if not user_ids:
+        # Parse users string for mentions and percentages
+        # Format: "@user1 50 @user2 @user3 25" etc.
+        user_data = []
+        percentage_users = []
+        equal_split_users = []
+        
+        # Extract user mentions and optional percentages
+        # Pattern: @user_id optionally followed by a number
+        pattern = r'<@!?(\d+)>\s*(\d+)?'
+        matches = re.findall(pattern, users)
+        
+        if not matches:
             await send_response(interaction, 
-                "❌ Please provide valid Discord user mentions (e.g., @username).\n\n"
-                "**Example:** `/split 500 @shon @theycall @ricky`\n"
-                "**Note:** Users must be mentioned using @ symbol, not just typed names.", 
+                "❌ Please provide valid Discord user mentions.\n\n"
+                "**Examples:**\n"
+                "• Equal split: `/split total_sand:1000 users:\"@user1 @user2\"`\n"
+                "• Percentage split: `/split total_sand:1000 users:\"@leader 60 @member1 @member2\"`\n"
+                "• Mixed: `/split total_sand:1000 users:\"@leader 40 @member1 @member2\" guild:5`", 
                 use_followup=use_followup, ephemeral=True)
             return
         
-        # Remove duplicates (no automatic initiator inclusion)
-        unique_user_ids = list(set(user_ids))
+        total_percentage = 0
+        for user_id, percentage_str in matches:
+            if percentage_str:  # User has a percentage
+                percentage = int(percentage_str)
+                if not 0 <= percentage <= 100:
+                    await send_response(interaction, f"❌ Percentage {percentage} is invalid. Must be between 0-100.", use_followup=use_followup, ephemeral=True)
+                    return
+                percentage_users.append((user_id, percentage))
+                total_percentage += percentage
+            else:  # User will get equal split
+                equal_split_users.append(user_id)
         
-        # Validate that we have at least one user to split with
-        if not unique_user_ids:
-            await send_response(interaction, 
-                "❌ You need to mention at least one user to split with.\n\n"
-                "**Example:** `/split 500 @username`\n"
-                "**Note:** Include @yourself if you want to be part of the split.", 
-                use_followup=use_followup, ephemeral=True)
+        # Validate percentages don't exceed 100%
+        if total_percentage > 100:
+            await send_response(interaction, f"❌ Total user percentages ({total_percentage}%) cannot exceed 100%.", use_followup=use_followup, ephemeral=True)
+            return
+        
+        # Calculate guild cut first
+        guild_sand = int(total_sand * (guild / 100))
+        remaining_sand = total_sand - guild_sand
+        
+        # Calculate user distributions
+        user_distributions = []
+        remaining_after_percentages = remaining_sand
+        
+        # First, allocate to percentage users
+        for user_id, percentage in percentage_users:
+            user_sand = int(remaining_sand * (percentage / 100))
+            user_distributions.append((user_id, user_sand, percentage))
+            remaining_after_percentages -= user_sand
+        
+        # Then, split remaining sand equally among non-percentage users
+        if equal_split_users:
+            equal_share = remaining_after_percentages // len(equal_split_users)
+            leftover = remaining_after_percentages % len(equal_split_users)
+            
+            for i, user_id in enumerate(equal_split_users):
+                # Give leftover sand to first few users
+                user_sand = equal_share + (1 if i < leftover else 0)
+                equal_percentage = (user_sand / remaining_sand) * 100 if remaining_sand > 0 else 0
+                user_distributions.append((user_id, user_sand, equal_percentage))
+        
+        # Remove duplicates and validate we have users
+        unique_distributions = {}
+        for user_id, sand, percentage in user_distributions:
+            if user_id in unique_distributions:
+                # Combine if user mentioned multiple times
+                existing_sand, existing_pct = unique_distributions[user_id]
+                unique_distributions[user_id] = (existing_sand + sand, existing_pct + percentage)
+            else:
+                unique_distributions[user_id] = (sand, percentage)
+        
+        if not unique_distributions:
+            await send_response(interaction, "❌ No valid users found to split with.", use_followup=use_followup, ephemeral=True)
             return
         
         # Get conversion rate
         sand_per_melange = get_sand_per_melange()
         
-        # Ensure the initiator exists in the users table before creating expedition
+        # Ensure the initiator exists in the users table
         from utils.database_utils import validate_user_exists
         await validate_user_exists(get_database(), str(interaction.user.id), interaction.user.display_name)
         
-        # Create expedition record
+        # Create expedition record with guild cut
         expedition_id = await get_database().create_expedition(
             str(interaction.user.id),
             interaction.user.display_name,
             total_sand,
-            sand_per_melange=sand_per_melange
+            sand_per_melange=sand_per_melange,
+            guild_cut_percentage=guild
         )
         
         if not expedition_id:
             await send_response(interaction, "❌ Failed to create expedition record.", use_followup=use_followup, ephemeral=True)
             return
         
-        # Calculate equal share per participant
-        total_participants = len(unique_user_ids)
-        share_per_participant = total_sand // total_participants
-        leftover_sand = total_sand % total_participants
+        # Add guild cut to treasury if > 0
+        if guild_sand > 0:
+            guild_melange = guild_sand // sand_per_melange
+            await get_database().update_guild_treasury(guild_sand, guild_melange)
         
         # Process all participants
         participant_details = []
-        total_melange = 0
+        total_user_melange = 0
         
-        for user_id in unique_user_ids:
-            # Get current display name for display purposes only
-            display_name = None
+        for user_id, (user_sand, user_percentage) in unique_distributions.items():
             try:
-                if interaction.guild:
+                # Try to get user from guild first, then client
+                try:
                     user = await interaction.guild.fetch_member(int(user_id))
                     display_name = user.display_name
-                else:
-                    # No guild context (DM), try to get user from Discord API
+                except:
                     try:
                         user = await interaction.client.fetch_user(int(user_id))
                         display_name = user.display_name
                     except:
                         display_name = f"User_{user_id}"
-            except Exception as e:
-                logger.warning(f"Could not fetch Discord user {user_id}: {e}")
-                display_name = f"User_{user_id}"
-            
-            # Ensure we have a valid display name
-            if not display_name or display_name.strip() == "":
-                display_name = f"User_{user_id}"
-            
-            # Calculate participant share (add leftover to first participant)
-            participant_sand = share_per_participant
-            if leftover_sand > 0 and user_id == unique_user_ids[0]:
-                participant_sand += leftover_sand
-            
-            participant_melange = participant_sand // sand_per_melange
-            participant_leftover = participant_sand % sand_per_melange
-            
-            # Batch database operations to reduce connection overhead
-            try:
-                # Ensure this participant exists in the users table
+                
+                # Ensure user exists in database
                 await validate_user_exists(get_database(), user_id, display_name)
                 
-                # Add to database using user_id for all operations
+                # Calculate melange and leftover sand
+                participant_melange = user_sand // sand_per_melange
+                participant_leftover = user_sand % sand_per_melange
+                total_user_melange += participant_melange
+                
+                # Add expedition participant
                 await get_database().add_expedition_participant(
-                    expedition_id,
-                    user_id,  # Use user_id for database operations
-                    display_name,  # Username only for display
-                    participant_sand,
-                    participant_melange,
-                    participant_leftover,
-                    is_harvester=False  # All participants are equal in this version
+                    expedition_id, user_id, display_name, user_sand, 
+                    participant_melange, participant_leftover, is_harvester=False
                 )
                 
-                # Create expedition deposit for participant using user_id
-                await get_database().add_expedition_deposit(
-                    user_id,  # Use user_id for database operations
-                    display_name,  # Username only for display
-                    participant_sand,
-                    expedition_id
-                )
+                # Add deposit record
+                await get_database().add_deposit(user_id, display_name, user_sand, expedition_id=expedition_id)
+                
+                # Format for display
+                percentage_text = f" ({user_percentage:.1f}%)" if user_percentage > 0 else ""
+                participant_details.append(f"**{display_name}**: {user_sand:,} sand ({participant_melange:,} melange){percentage_text}")
+                
             except Exception as participant_error:
-                logger.error(f"Failed to process participant {display_name}: {participant_error}")
-                raise
-            
-            # Mark if this is the initiator
-            initiator_mark = " (initiator)" if user_id == str(interaction.user.id) else ""
-            participant_details.append(f"**{display_name}**: {participant_sand:,} sand ({participant_melange:,} melange){initiator_mark}")
-            total_melange += participant_melange
+                logger.error(f"Error processing participant {user_id}: {participant_error}")
+                participant_details.append(f"**User_{user_id}**: {user_sand:,} sand (error processing)")
         
         # Build response embed
-        from utils.embed_builder import EmbedBuilder
-        embed = (EmbedBuilder("🏜️ Expedition Created", 
-                              description=f"**Expedition #{expedition_id}** has been created and recorded in the database!",
-                              color=0xF39C12, timestamp=interaction.created_at)
-                 .add_field("📊 Expedition Summary", 
-                           f"**Total Sand:** {total_sand:,}\n"
-                           f"**Participants:** {total_participants}\n"
-                           f"**Equal Share:** {share_per_participant:,} sand per person", inline=False)
-                 .add_field("💰 Melange Distribution", 
-                           f"**Total Melange:** {total_melange:,}", inline=False)
-                 .add_field("📋 Participants", 
-                           "\n".join(participant_details), inline=False)
-                 .add_field("📋 Database Status", 
-                           f"✅ Expedition record created\n"
-                           f"✅ Participant shares recorded\n"
-                           f"✅ Deposits logged for payout tracking\n"
-                           f"🔗 Use `/expedition {expedition_id}` to view details", inline=False)
-                 .set_footer(f"Expedition initiated by {interaction.user.display_name}", interaction.user.display_avatar.url))
+        from utils.embed_utils import build_status_embed
         
+        fields = {
+            "🏛️ Guild Treasury": f"**Guild Cut:** {guild}% ({guild_sand:,} sand)\n**Guild Melange:** {guild_sand // sand_per_melange:,}",
+            "👥 Expedition Participants": "\n".join(participant_details),
+            "📊 Split Summary": f"**Total Sand:** {total_sand:,}\n"
+                               f"**Guild Cut:** {guild_sand:,} sand ({guild}%)\n"
+                               f"**User Sand:** {remaining_sand:,} sand\n"
+                               f"**Total User Melange:** {total_user_melange:,}",
+        }
+        
+        embed = build_status_embed(
+            title="🏜️ Expedition Split Completed",
+            description=f"**Expedition #{expedition_id}** - {len(unique_distributions)} participants",
+            color=0x00FF00,
+            fields=fields,
+            footer=f"Initiated by {interaction.user.display_name}",
+            timestamp=interaction.created_at
+        )
+        
+        # Send response
         await send_response(interaction, embed=embed.build(), use_followup=use_followup)
         
         # Log the expedition creation
-        logger.bot_event(f"Expedition {expedition_id} created by {interaction.user.display_name} ({interaction.user.id}) - {total_sand} sand, {total_participants} participants")
+        logger.info(f"Expedition {expedition_id} created by {interaction.user.display_name} ({interaction.user.id})", 
+                   total_sand=total_sand, guild_cut=guild_sand, participants=len(unique_distributions))
         
     except Exception as error:
-        import traceback
-        logger.error(f"Error in split command: {error}", 
-                    user_id=str(interaction.user.id),
-                    username=interaction.user.display_name,
-                    traceback=traceback.format_exc())
+        logger.error(f"Error in split command: {error}")
+        logger.error(f"Split command traceback: {traceback.format_exc()}")
+        
         try:
-            await send_response(interaction, "❌ An error occurred while creating the expedition.", use_followup=use_followup, ephemeral=True)
+            await send_response(interaction, "❌ An error occurred while processing the split. Please try again.", use_followup=use_followup, ephemeral=True)
         except Exception as response_error:
             logger.error(f"Failed to send error response: {response_error}")

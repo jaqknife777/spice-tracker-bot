@@ -433,24 +433,137 @@ class Database:
                                         user_id=user_id, include_paid=include_paid, error=str(e))
                 raise e
 
-    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage=0.0, sand_per_melange=None):
+    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage=0.0, sand_per_melange=None, guild_cut_percentage=10.0):
         """Create a new expedition record"""
         start_time = time.time()
         async with self._get_connection() as conn:
             try:
                 row = await conn.fetchrow('''
-                    INSERT INTO expeditions (initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange)
-                    VALUES ($1, $2, $3, $4, $5)
+                    INSERT INTO expeditions (initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange, guild_cut_percentage)
+                    VALUES ($1, $2, $3, $4, $5, $6)
                     RETURNING id
-                ''', initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange)
+                ''', initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange, guild_cut_percentage)
                 
                 expedition_id = row[0] if row else None
                 await self._log_operation("insert", "expeditions", start_time, success=True, 
-                                        initiator_id=initiator_id, total_sand=total_sand, expedition_id=expedition_id)
+                                        initiator_id=initiator_id, total_sand=total_sand, expedition_id=expedition_id, guild_cut_percentage=guild_cut_percentage)
                 return expedition_id
             except Exception as e:
                 await self._log_operation("insert", "expeditions", start_time, success=False, 
                                         initiator_id=initiator_id, total_sand=total_sand, error=str(e))
+                raise e
+
+    async def get_guild_treasury(self):
+        """Get guild treasury information"""
+        start_time = time.time()
+        async with self._get_connection() as conn:
+            try:
+                row = await conn.fetchrow('''
+                    SELECT total_sand, total_melange, created_at, last_updated
+                    FROM guild_treasury
+                    ORDER BY id DESC
+                    LIMIT 1
+                ''')
+                
+                if row:
+                    treasury = {
+                        'total_sand': row['total_sand'],
+                        'total_melange': row['total_melange'],
+                        'created_at': row['created_at'],
+                        'last_updated': row['last_updated']
+                    }
+                else:
+                    # Create initial treasury record if none exists
+                    await conn.execute('''
+                        INSERT INTO guild_treasury (guild_name, total_sand, total_melange)
+                        VALUES ($1, $2, $3)
+                    ''', 'Guild Treasury', 0, 0)
+                    treasury = {'total_sand': 0, 'total_melange': 0, 'created_at': None, 'last_updated': None}
+                
+                await self._log_operation("select", "guild_treasury", start_time, success=True)
+                return treasury
+            except Exception as e:
+                await self._log_operation("select", "guild_treasury", start_time, success=False, error=str(e))
+                raise e
+
+    async def update_guild_treasury(self, sand_amount, melange_amount=0):
+        """Add sand and melange to guild treasury"""
+        start_time = time.time()
+        async with self._get_connection() as conn:
+            try:
+                # Update or insert guild treasury
+                await conn.execute('''
+                    INSERT INTO guild_treasury (guild_name, total_sand, total_melange, last_updated)
+                    VALUES ('Guild Treasury', $1, $2, CURRENT_TIMESTAMP)
+                    ON CONFLICT (id) DO UPDATE SET
+                        total_sand = guild_treasury.total_sand + $1,
+                        total_melange = guild_treasury.total_melange + $2,
+                        last_updated = CURRENT_TIMESTAMP
+                    WHERE guild_treasury.id = (SELECT MAX(id) FROM guild_treasury)
+                ''', sand_amount, melange_amount)
+                
+                # If no existing record, do a simpler insert
+                result = await conn.fetchrow('SELECT COUNT(*) as count FROM guild_treasury')
+                if result['count'] == 0:
+                    await conn.execute('''
+                        INSERT INTO guild_treasury (guild_name, total_sand, total_melange)
+                        VALUES ('Guild Treasury', $1, $2)
+                    ''', sand_amount, melange_amount)
+                else:
+                    await conn.execute('''
+                        UPDATE guild_treasury 
+                        SET total_sand = total_sand + $1,
+                            total_melange = total_melange + $2,
+                            last_updated = CURRENT_TIMESTAMP
+                        WHERE id = (SELECT MAX(id) FROM guild_treasury)
+                    ''', sand_amount, melange_amount)
+                
+                await self._log_operation("update", "guild_treasury", start_time, success=True, 
+                                        sand_amount=sand_amount, melange_amount=melange_amount)
+                return True
+            except Exception as e:
+                await self._log_operation("update", "guild_treasury", start_time, success=False, 
+                                        sand_amount=sand_amount, melange_amount=melange_amount, error=str(e))
+                raise e
+
+    async def guild_withdraw(self, admin_user_id, admin_username, target_user_id, target_username, sand_amount):
+        """Withdraw sand from guild treasury and give to user"""
+        start_time = time.time()
+        async with self._get_connection() as conn:
+            try:
+                # Check if guild has enough sand
+                treasury = await self.get_guild_treasury()
+                if treasury['total_sand'] < sand_amount:
+                    raise ValueError(f"Insufficient guild treasury funds. Available: {treasury['total_sand']}, Requested: {sand_amount}")
+                
+                # Start transaction
+                async with conn.transaction():
+                    # Remove sand from guild treasury
+                    await conn.execute('''
+                        UPDATE guild_treasury 
+                        SET total_sand = total_sand - $1,
+                            last_updated = CURRENT_TIMESTAMP
+                        WHERE id = (SELECT MAX(id) FROM guild_treasury)
+                    ''', sand_amount)
+                    
+                    # Add sand to user as deposit
+                    await conn.execute('''
+                        INSERT INTO deposits (user_id, username, sand_amount, type, paid, created_at, paid_at)
+                        VALUES ($1, $2, $3, 'guild_withdrawal', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ''', target_user_id, target_username, sand_amount)
+                    
+                    # Record transaction
+                    await conn.execute('''
+                        INSERT INTO guild_transactions (transaction_type, sand_amount, admin_user_id, admin_username, target_user_id, target_username, description)
+                        VALUES ('withdrawal', $1, $2, $3, $4, $5, $6)
+                    ''', sand_amount, admin_user_id, admin_username, target_user_id, target_username, f"Guild withdrawal to {target_username}")
+                
+                await self._log_operation("update", "guild_treasury", start_time, success=True, 
+                                        operation="withdrawal", sand_amount=sand_amount, target_user_id=target_user_id)
+                return True
+            except Exception as e:
+                await self._log_operation("update", "guild_treasury", start_time, success=False, 
+                                        operation="withdrawal", sand_amount=sand_amount, target_user_id=target_user_id, error=str(e))
                 raise e
 
     async def add_expedition_participant(self, expedition_id, user_id, username, sand_amount, melange_amount, leftover_sand, is_harvester=False):
@@ -492,10 +605,22 @@ class Database:
                 raise e
 
     async def get_expedition_participants(self, expedition_id):
-        """Get all participants for a specific expedition"""
+        """Get all participants for a specific expedition with expedition details"""
         start_time = time.time()
         async with self._get_connection() as conn:
             try:
+                # Get expedition details first
+                expedition_row = await conn.fetchrow('''
+                    SELECT initiator_id, initiator_username, total_sand, guild_cut_percentage, 
+                           sand_per_melange, created_at
+                    FROM expeditions 
+                    WHERE id = $1
+                ''', expedition_id)
+                
+                if not expedition_row:
+                    return None
+                
+                # Get participants
                 rows = await conn.fetch('''
                     SELECT * FROM expedition_participants 
                     WHERE expedition_id = $1
@@ -515,9 +640,23 @@ class Database:
                         'is_harvester': bool(row[7])
                     })
                 
+                # Combine expedition details with participants
+                result = {
+                    'expedition': {
+                        'id': expedition_id,
+                        'initiator_id': expedition_row['initiator_id'],
+                        'initiator_username': expedition_row['initiator_username'],
+                        'total_sand': expedition_row['total_sand'],
+                        'guild_cut_percentage': expedition_row['guild_cut_percentage'] or 0,
+                        'sand_per_melange': expedition_row['sand_per_melange'],
+                        'created_at': expedition_row['created_at']
+                    },
+                    'participants': participants
+                }
+                
                 await self._log_operation("select", "expedition_participants", start_time, success=True, 
                                         expedition_id=expedition_id, result_count=len(participants))
-                return participants
+                return result
             except Exception as e:
                 await self._log_operation("select", "expedition_participants", start_time, success=False, 
                                         expedition_id=expedition_id, error=str(e))

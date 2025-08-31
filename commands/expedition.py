@@ -25,35 +25,46 @@ async def expedition(interaction, expedition_id: int, use_followup: bool = True)
     
     try:
         # Get expedition details using utility function
-        expedition_participants, get_participants_time = await timed_database_operation(
+        expedition_data, get_participants_time = await timed_database_operation(
             "get_expedition_participants",
             get_database().get_expedition_participants,
             expedition_id
         )
         
-        if not expedition_participants:
+        if not expedition_data:
             await send_response(interaction, "❌ Expedition not found or you don't have access to it.", use_followup=use_followup, ephemeral=True)
             return
         
+        expedition = expedition_data['expedition']
+        expedition_participants = expedition_data['participants']
+        
+        # Calculate guild cut amounts
+        guild_cut_percentage = expedition['guild_cut_percentage']
+        total_expedition_sand = expedition['total_sand']
+        guild_sand = int(total_expedition_sand * (guild_cut_percentage / 100))
+        user_sand = total_expedition_sand - guild_sand
+        
         # Build participant list
         participant_details = []
-        total_sand = 0
+        total_participant_sand = 0
         
         for participant in expedition_participants:
             role = "🏭 Primary Harvester" if participant['is_harvester'] else "👥 Expedition Member"
             status = "✅ Paid" if participant['sand_amount'] == 0 else "⏳ Unpaid"
             participant_details.append(f"{role}: **{participant['username']}**\n"
                                     f"   Sand: {participant['sand_amount']:,} | Melange: {participant['melange_amount']:,} | Leftover: {participant['leftover_sand']:,} - {status}")
-            total_sand += participant['sand_amount']
+            total_participant_sand += participant['sand_amount']
         
         # Use utility function for embed building
         fields = {
-            "📋 Expedition Participants": "\n\n".join(participant_details)
+            "🏛️ Guild Cut": f"**Guild Cut:** {guild_cut_percentage}% ({guild_sand:,} sand)\n**Guild Melange:** {guild_sand // expedition['sand_per_melange']:,}",
+            "📋 Expedition Participants": "\n\n".join(participant_details) if participant_details else "No participants",
+            "📊 Expedition Summary": f"**Initiator:** {expedition['initiator_username']}\n**Total Sand:** {total_expedition_sand:,}\n**User Sand:** {user_sand:,}\n**Participants:** {len(expedition_participants)}"
         }
         
         embed = build_status_embed(
             title=f"🏜️ Expedition #{expedition_id}",
-            description=f"**Total Sand Distributed:** {total_sand:,}\n**Participants:** {len(expedition_participants)}",
+            description=f"⚗️ **Sand per Melange:** {expedition['sand_per_melange']} | 🗓️ **Created:** {expedition['created_at'].strftime('%Y-%m-%d %H:%M UTC')}",
             color=0xF39C12,
             fields=fields,
             footer=f"Requested by {interaction.user.display_name}",
@@ -76,7 +87,9 @@ async def expedition(interaction, expedition_id: int, use_followup: bool = True)
             get_participants_time=f"{get_participants_time:.3f}s",
             response_time=f"{response_time:.3f}s",
             participant_count=len(expedition_participants),
-            total_sand=total_sand
+            total_expedition_sand=total_expedition_sand,
+            guild_cut_percentage=guild_cut_percentage,
+            guild_sand=guild_sand
         )
         
     except Exception as error:

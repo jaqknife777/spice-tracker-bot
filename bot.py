@@ -117,7 +117,7 @@ async def on_ready():
 # Register commands with the bot's command tree
 def register_commands():
     """Register all commands explicitly with their exact signatures"""
-    from commands import harvest, refinery, leaderboard, conversion, split, help, reset, ledger, expedition, payment, payroll
+    from commands import harvest, refinery, leaderboard, conversion, split, help, reset, ledger, expedition, payment, payroll, guild_treasury, guild_withdraw
     
     # Harvest command
     @bot.tree.command(name="harvest", description="Log spice sand harvests and calculate melange conversion")
@@ -142,13 +142,14 @@ def register_commands():
         await conversion(interaction, True)
     
     # Split command
-    @bot.tree.command(name="split", description="Split harvested spice sand among expedition members")
+    @bot.tree.command(name="split", description="Split harvested spice sand among expedition members with guild cut")
     @app_commands.describe(
-        total_sand="Total spice sand to split equally",
-        users="List of Discord users to split with (use @mentions)"
+        total_sand="Total spice sand to split",
+        users="Users and percentages: '@user1 50 @user2 @user3' (users without % split equally)",
+        guild="Guild cut percentage (default: 10)"
     )
-    async def split_cmd(interaction: discord.Interaction, total_sand: int, users: str):  # noqa: F841
-        await split(interaction, total_sand, users, True)
+    async def split_cmd(interaction: discord.Interaction, total_sand: int, users: str, guild: int = 10):  # noqa: F841
+        await split(interaction, total_sand, users, guild, True)
     
     # Help command
     @bot.tree.command(name="help", description="Show all available spice tracking commands")
@@ -182,6 +183,20 @@ def register_commands():
     @bot.tree.command(name="payroll", description="Process payments for all unpaid harvesters (Admin only)")
     async def payroll_cmd(interaction: discord.Interaction):  # noqa: F841
         await payroll(interaction, True)
+    
+    # Guild Treasury command
+    @bot.tree.command(name="guild_treasury", description="View guild treasury balance and statistics")
+    async def guild_treasury_cmd(interaction: discord.Interaction):  # noqa: F841
+        await guild_treasury(interaction, True)
+    
+    # Guild Withdraw command
+    @bot.tree.command(name="guild_withdraw", description="Withdraw sand from guild treasury to give to a user (Admin only)")
+    @app_commands.describe(
+        user="User to give sand to",
+        amount="Amount of sand to withdraw from guild treasury"
+    )
+    async def guild_withdraw_cmd(interaction: discord.Interaction, user: discord.Member, amount: int):  # noqa: F841
+        await guild_withdraw(interaction, user, amount, True)
     
     print(f"✅ Registered all commands explicitly")
 
