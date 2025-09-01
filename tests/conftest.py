@@ -75,6 +75,11 @@ def mock_database():
     db.get_user = AsyncMock(return_value={"user_id": "123", "username": "TestUser"})
     db.get_user_total_sand = AsyncMock(return_value=1000)
     db.get_user_paid_sand = AsyncMock(return_value=500)
+    db.get_user_pending_melange = AsyncMock(return_value={
+        'total_melange': 20,
+        'paid_melange': 10,
+        'pending_melange': 10
+    })
     
     # Add missing methods that commands expect
     db.get_leaderboard = AsyncMock(return_value=[

@@ -47,7 +47,7 @@ async def harvest(interaction, amount: int, use_followup: bool):
     
     # Calculate melange conversion
     total_melange_earned = user_stats['total_sand'] // sand_per_melange
-    current_melange = user['total_melange'] if user and user['total_melange'] is not None else 0
+    current_melange = user_stats['total_melange']
     new_melange = max(0, total_melange_earned - current_melange)  # Ensure new_melange is never negative
     
     # Only update melange if we have new melange to add
@@ -65,8 +65,8 @@ async def harvest(interaction, amount: int, use_followup: bool):
     
     # Use utility function for embed building
     fields = {
-        "📊 Harvest Summary": f"**Spice Sand Harvested:** {amount:,}\n**Total Unpaid Harvest:** {user_stats['total_sand']:,}",
-        "✨ Melange Production": f"**Total Melange:** {(current_melange + new_melange):,}\n**Conversion Rate:** {sand_per_melange} sand = 1 melange",
+        "📊 Harvest Summary": f"**Spice Sand Harvested:** {amount:,}\n**Total Sand Collected:** {user_stats['total_sand']:,}",
+        "✨ Melange Production": f"**Total Melange Earned:** {(current_melange + new_melange):,}\n**Conversion Rate:** {sand_per_melange} sand = 1 melange",
         "🎯 Next Refinement": f"**Sand Until Next Melange:** {sand_needed:,}"
     }
     

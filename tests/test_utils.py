@@ -106,20 +106,24 @@ class TestDatabaseUtils:
         
         # Check that the function returns the expected structure
         assert "total_sand" in result
-        assert "paid_sand" in result
+        assert "total_melange" in result
+        assert "paid_melange" in result
+        assert "pending_melange" in result
         assert "user" in result
         assert "timing" in result
         assert "total_time" in result
         
         # Check the actual values
         assert result["total_sand"] == 1000
-        assert result["paid_sand"] == 500
+        assert result["total_melange"] == 20
+        assert result["paid_melange"] == 10
+        assert result["pending_melange"] == 10
         assert result["user"]["user_id"] == "123"
         
         # Verify the database methods were called
         mock_database.get_user.assert_called_once_with("123")
         mock_database.get_user_total_sand.assert_called_once_with("123")
-        mock_database.get_user_paid_sand.assert_called_once_with("123")
+        mock_database.get_user_pending_melange.assert_called_once_with("123")
 
 class TestDecorators:
     """Test decorator functions."""

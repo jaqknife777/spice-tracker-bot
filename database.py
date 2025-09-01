@@ -211,16 +211,16 @@ class Database:
                                         user_id=user_id, include_paid=include_paid, error=str(e))
                 raise e
 
-    async def create_expedition(self, initiator_id, initiator_username, total_sand, harvester_percentage=0.0, sand_per_melange=None, guild_cut_percentage=10.0):
+    async def create_expedition(self, initiator_id, initiator_username, total_sand, sand_per_melange=None, guild_cut_percentage=10.0):
         """Create a new expedition record"""
         start_time = time.time()
         async with self._get_connection() as conn:
             try:
                 row = await conn.fetchrow('''
-                    INSERT INTO expeditions (initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange, guild_cut_percentage)
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    INSERT INTO expeditions (initiator_id, initiator_username, total_sand, sand_per_melange, guild_cut_percentage)
+                    VALUES ($1, $2, $3, $4, $5)
                     RETURNING id
-                ''', initiator_id, initiator_username, total_sand, harvester_percentage, sand_per_melange, guild_cut_percentage)
+                ''', initiator_id, initiator_username, total_sand, sand_per_melange, guild_cut_percentage)
                 
                 expedition_id = row[0] if row else None
                 await self._log_operation("insert", "expeditions", start_time, success=True, 
@@ -700,6 +700,26 @@ class Database:
             except Exception as e:
                 await self._log_operation("update", "users", start_time, success=False, 
                                         user_id=user_id, melange_amount=melange_amount, error=str(e))
+                raise e
+
+    async def get_user_total_sand(self, user_id):
+        """Get total sand amount for a user from deposits"""
+        start_time = time.time()
+        async with self._get_connection() as conn:
+            try:
+                result = await conn.fetchval('''
+                    SELECT COALESCE(SUM(sand_amount), 0) 
+                    FROM deposits 
+                    WHERE user_id = $1
+                ''', user_id)
+                
+                total_sand = result or 0
+                await self._log_operation("select_sum", "deposits", start_time, success=True, 
+                                        user_id=user_id, total_sand=total_sand)
+                return total_sand
+            except Exception as e:
+                await self._log_operation("select_sum", "deposits", start_time, success=False, 
+                                        user_id=user_id, error=str(e))
                 raise e
 
     async def get_leaderboard(self, limit=10):

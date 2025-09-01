@@ -31,7 +31,6 @@ CREATE TABLE expeditions (
     initiator_id TEXT NOT NULL,
     initiator_username TEXT NOT NULL,
     total_sand INTEGER NOT NULL,
-    harvester_percentage FLOAT DEFAULT 0.0,
     sand_per_melange INTEGER NOT NULL,
     guild_cut_percentage FLOAT DEFAULT 10.0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
