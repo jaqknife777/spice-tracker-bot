@@ -92,7 +92,7 @@ async def pending(interaction, use_followup: bool = True):
         
         embed = build_status_embed(
             title="📋 Guild Pending Melange Payments",
-            description=f"💰 **{total_melange_owed:,} melange** owed across **{len(sorted_users)} user{'s' if len(sorted_users) != 1 else ''}**",
+            description=f"💰 **{total_melange_owed:,} melange** owed across **{total_users} user{'s' if total_users != 1 else ''}**",
             color=color,
             fields=fields,
             footer=f"Admin Report • Requested by {interaction.user.display_name}",
