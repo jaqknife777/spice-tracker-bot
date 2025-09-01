@@ -29,13 +29,13 @@ async def pending(interaction, use_followup: bool = True):
         return
     
     try:
-        # Get all unpaid deposits using utility function
-        unpaid_deposits, get_deposits_time = await timed_database_operation(
-            "get_all_unpaid_deposits",
-            get_database().get_all_unpaid_deposits
+        # Get all users with pending melange using utility function
+        users_with_pending, get_pending_time = await timed_database_operation(
+            "get_all_users_with_pending_melange",
+            get_database().get_all_users_with_pending_melange
         )
         
-        if not unpaid_deposits:
+        if not users_with_pending:
             embed = build_status_embed(
                 title="📋 Pending Melange Payments",
                 description="✅ **No pending payments!**\n\nAll harvesters have been paid up to date.",
@@ -46,44 +46,22 @@ async def pending(interaction, use_followup: bool = True):
             await send_response(interaction, embed=embed.build(), use_followup=use_followup)
             return
         
-        # Group deposits by user and calculate totals
-        sand_per_melange = get_sand_per_melange()
-        user_totals = {}
-        total_sand_owed = 0
-        total_melange_owed = 0
+        # Calculate totals
+        total_melange_owed = sum(user['pending_melange'] for user in users_with_pending)
+        total_sand = sum(user['total_sand'] for user in users_with_pending)
+        total_users = len(users_with_pending)
         
-        for deposit in unpaid_deposits:
-            user_id = deposit['user_id']
-            username = deposit['username']
-            sand_amount = deposit['sand_amount']
-            
-            if user_id not in user_totals:
-                user_totals[user_id] = {
-                    'username': username,
-                    'total_sand': 0,
-                    'deposit_count': 0
-                }
-            
-            user_totals[user_id]['total_sand'] += sand_amount
-            user_totals[user_id]['deposit_count'] += 1
-            total_sand_owed += sand_amount
-        
-        # Sort users by total sand owed (descending)
-        sorted_users = sorted(user_totals.items(), key=lambda x: x[1]['total_sand'], reverse=True)
-        
-        # Build user list with melange calculations
+        # Build user list with melange information
         user_list = []
-        for user_id, user_data in sorted_users:
+        for user_data in users_with_pending:
             username = user_data['username']
-            sand_owed = user_data['total_sand']
-            melange_owed = sand_owed // sand_per_melange
-            deposit_count = user_data['deposit_count']
-            
-            total_melange_owed += melange_owed
+            pending_melange = user_data['pending_melange']
+            total_sand_user = user_data['total_sand']
+            deposit_count = user_data['total_deposits']
             
             # Format user entry
             deposits_text = f"{deposit_count} deposit{'s' if deposit_count != 1 else ''}"
-            user_list.append(f"• **{username}**: {sand_owed:,} sand → **{melange_owed:,} melange** ({deposits_text})")
+            user_list.append(f"• **{username}**: {total_sand_user:,} sand → **{pending_melange:,} melange** ({deposits_text})")
         
         # Limit display to prevent embed overflow
         max_users_shown = 20
@@ -93,20 +71,13 @@ async def pending(interaction, use_followup: bool = True):
             shown_users.append(f"... and {remaining_count} more user{'s' if remaining_count != 1 else ''}")
             user_list = shown_users
         
-        # Calculate summary stats
-        remaining_sand = total_sand_owed % sand_per_melange
-        sand_ready_for_melange = total_sand_owed - remaining_sand
-        
         # Build response embed
         fields = {
             "👥 Users Awaiting Payment": "\n".join(user_list) if user_list else "No users pending payment",
-            "📊 Payment Summary": f"**Users:** {len(sorted_users):,}\n"
-                                 f"**Total Sand Owed:** {total_sand_owed:,}\n"
-                                 f"**Total Melange Owed:** {total_melange_owed:,}\n"
-                                 f"**Sand Ready for Melange:** {sand_ready_for_melange:,}\n"
-                                 f"**Remaining Sand:** {remaining_sand:,}",
-            "⚗️ Conversion Info": f"**Conversion Rate:** {sand_per_melange} sand = 1 melange\n"
-                                 f"**Total Deposits:** {len(unpaid_deposits):,}"
+            "💰 Payment Summary": f"**Users with Pending Melange:** {total_users:,}\n"
+                                 f"**Total Sand Collected:** {total_sand:,}\n"
+                                 f"**Total Melange Owed:** {total_melange_owed:,}",
+            "📊 Additional Info": f"**Total Deposits:** {sum(user['total_deposits'] for user in users_with_pending):,}"
         }
         
         # Color based on amount owed
@@ -136,23 +107,22 @@ async def pending(interaction, use_followup: bool = True):
         # Log metrics
         total_time = time.time() - command_start
         log_command_metrics(
-            "Pending Payments",
+            "Pending Melange",
             str(interaction.user.id),
             interaction.user.display_name,
             total_time,
             admin_id=str(interaction.user.id),
             admin_username=interaction.user.display_name,
-            get_deposits_time=f"{get_deposits_time:.3f}s",
+            get_pending_time=f"{get_pending_time:.3f}s",
             response_time=f"{response_time:.3f}s",
-            users_with_pending=len(sorted_users),
-            total_sand_owed=total_sand_owed,
-            total_melange_owed=total_melange_owed,
-            total_deposits=len(unpaid_deposits)
+            users_with_pending=total_users,
+            total_sand=total_sand,
+            total_melange_owed=total_melange_owed
         )
         
         # Log the admin request for audit
-        logger.info(f"Pending payments report requested by admin {interaction.user.display_name} ({interaction.user.id})", 
-                   users_pending=len(sorted_users), total_melange_owed=total_melange_owed)
+        logger.info(f"Pending melange report requested by admin {interaction.user.display_name} ({interaction.user.id})", 
+                   users_pending=total_users, total_melange_owed=total_melange_owed)
         
     except Exception as error:
         total_time = time.time() - command_start

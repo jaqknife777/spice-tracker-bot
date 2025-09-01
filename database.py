@@ -515,50 +515,142 @@ class Database:
                                         user_id=user_id, paid=True, error=str(e))
                 raise e
 
-    async def mark_deposit_paid(self, deposit_id, user_id):
-        """Mark a specific deposit as paid"""
+    async def pay_user_melange(self, user_id, username, melange_amount, admin_user_id=None, admin_username=None):
+        """Pay melange to a user and record the payment"""
         start_time = time.time()
         async with self._get_connection() as conn:
             try:
-                await conn.execute('''
-                    UPDATE deposits 
-                    SET paid = TRUE, paid_at = CURRENT_TIMESTAMP
-                    WHERE id = $1 AND user_id = $2
-                ''', deposit_id, user_id)
+                async with conn.transaction():
+                    # Update user's paid_melange
+                    await conn.execute('''
+                        UPDATE users 
+                        SET paid_melange = paid_melange + $1,
+                            last_updated = CURRENT_TIMESTAMP
+                        WHERE user_id = $2
+                    ''', melange_amount, user_id)
+                    
+                    # Record the payment
+                    await conn.execute('''
+                        INSERT INTO melange_payments (user_id, username, melange_amount, admin_user_id, admin_username, description)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                    ''', user_id, username, melange_amount, admin_user_id, admin_username, f"Melange payment to {username}")
                 
-                await self._log_operation("update", "deposits", start_time, success=True, 
-                                        deposit_id=deposit_id, user_id=user_id, action="mark_paid")
+                await self._log_operation("update", "melange_payments", start_time, success=True, 
+                                        user_id=user_id, melange_amount=melange_amount, admin_user_id=admin_user_id)
+                return melange_amount
             except Exception as e:
-                await self._log_operation("update", "deposits", start_time, success=False, 
-                                        deposit_id=deposit_id, user_id=user_id, action="mark_paid", error=str(e))
+                await self._log_operation("update", "melange_payments", start_time, success=False, 
+                                        user_id=user_id, melange_amount=melange_amount, admin_user_id=admin_user_id, error=str(e))
                 raise e
 
-    async def mark_all_user_deposits_paid(self, user_id):
-        """Mark all unpaid deposits for a user as paid"""
+    async def pay_all_pending_melange(self, admin_user_id=None, admin_username=None):
+        """Pay all users their pending melange"""
         start_time = time.time()
         async with self._get_connection() as conn:
             try:
-                result = await conn.execute('''
-                    UPDATE deposits 
-                    SET paid = TRUE, paid_at = CURRENT_TIMESTAMP
-                    WHERE user_id = $1 AND paid = FALSE
+                # Get all users with pending melange
+                users_with_pending = await conn.fetch('''
+                    SELECT user_id, username, total_melange, paid_melange,
+                           (total_melange - paid_melange) as pending_melange
+                    FROM users 
+                    WHERE total_melange > paid_melange
+                ''')
+                
+                total_paid = 0
+                users_paid = 0
+                
+                async with conn.transaction():
+                    for user in users_with_pending:
+                        pending = user['pending_melange']
+                        if pending > 0:
+                            # Update user's paid_melange
+                            await conn.execute('''
+                                UPDATE users 
+                                SET paid_melange = total_melange,
+                                    last_updated = CURRENT_TIMESTAMP
+                                WHERE user_id = $1
+                            ''', user['user_id'])
+                            
+                            # Record the payment
+                            await conn.execute('''
+                                INSERT INTO melange_payments (user_id, username, melange_amount, admin_user_id, admin_username, description)
+                                VALUES ($1, $2, $3, $4, $5, $6)
+                            ''', user['user_id'], user['username'], pending, admin_user_id, admin_username, f"Bulk melange payment to {user['username']}")
+                            
+                            total_paid += pending
+                            users_paid += 1
+                
+                await self._log_operation("update", "melange_payments", start_time, success=True, 
+                                        total_paid=total_paid, users_paid=users_paid, admin_user_id=admin_user_id)
+                return {"total_paid": total_paid, "users_paid": users_paid}
+            except Exception as e:
+                await self._log_operation("update", "melange_payments", start_time, success=False, 
+                                        admin_user_id=admin_user_id, error=str(e))
+                raise e
+
+    async def get_user_pending_melange(self, user_id):
+        """Get pending melange amount for a user"""
+        start_time = time.time()
+        async with self._get_connection() as conn:
+            try:
+                row = await conn.fetchrow('''
+                    SELECT total_melange, paid_melange, 
+                           (total_melange - paid_melange) as pending_melange
+                    FROM users 
+                    WHERE user_id = $1
                 ''', user_id)
                 
-                # Parse the result to get count of updated rows
-                if result:
-                    try:
-                        count_str = result.split()[-1]
-                        updated_count = int(count_str)
-                    except (ValueError, IndexError):
-                        updated_count = 0
+                if row:
+                    result = {
+                        'total_melange': row['total_melange'],
+                        'paid_melange': row['paid_melange'],
+                        'pending_melange': row['pending_melange']
+                    }
                 else:
-                    updated_count = 0
+                    result = {'total_melange': 0, 'paid_melange': 0, 'pending_melange': 0}
                 
-                await self._log_operation("update", "deposits", start_time, success=True, 
-                                        user_id=user_id, action="mark_all_paid", updated_count=updated_count)
+                await self._log_operation("select", "users", start_time, success=True, 
+                                        user_id=user_id, pending_melange=result['pending_melange'])
+                return result
             except Exception as e:
-                await self._log_operation("update", "deposits", start_time, success=False, 
-                                        user_id=user_id, action="mark_all_paid", error=str(e))
+                await self._log_operation("select", "users", start_time, success=False, 
+                                        user_id=user_id, error=str(e))
+                raise e
+
+    async def get_all_users_with_pending_melange(self):
+        """Get all users with pending melange payments"""
+        start_time = time.time()
+        async with self._get_connection() as conn:
+            try:
+                rows = await conn.fetch('''
+                    SELECT user_id, username, total_melange, paid_melange,
+                           (total_melange - paid_melange) as pending_melange,
+                           COALESCE(SUM(d.sand_amount), 0) as total_sand,
+                           COUNT(d.id) as total_deposits
+                    FROM users u
+                    LEFT JOIN deposits d ON u.user_id = d.user_id
+                    WHERE u.total_melange > u.paid_melange
+                    GROUP BY u.user_id, u.username, u.total_melange, u.paid_melange
+                    ORDER BY pending_melange DESC, u.username
+                ''')
+                
+                users = []
+                for row in rows:
+                    users.append({
+                        'user_id': row['user_id'],
+                        'username': row['username'],
+                        'total_melange': row['total_melange'],
+                        'paid_melange': row['paid_melange'],
+                        'pending_melange': row['pending_melange'],
+                        'total_sand': row['total_sand'],
+                        'total_deposits': row['total_deposits']
+                    })
+                
+                await self._log_operation("select", "users", start_time, success=True, 
+                                        result_count=len(users))
+                return users
+            except Exception as e:
+                await self._log_operation("select", "users", start_time, success=False, error=str(e))
                 raise e
 
     async def cleanup_old_deposits(self, days=30):

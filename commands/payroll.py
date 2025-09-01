@@ -27,16 +27,20 @@ async def payroll(interaction, use_followup: bool = True):
         await send_response(interaction, "❌ You need an admin role to use this command. Contact a server administrator.", use_followup=use_followup, ephemeral=True)
         return
     
-    # Get all unpaid deposits using utility function
-    unpaid_deposits, get_deposits_time = await timed_database_operation(
-        "get_all_unpaid_deposits",
-        get_database().get_all_unpaid_deposits
+    # Pay all users their pending melange
+    payroll_result, payroll_time = await timed_database_operation(
+        "pay_all_pending_melange",
+        get_database().pay_all_pending_melange,
+        str(interaction.user.id), interaction.user.display_name
     )
     
-    if not unpaid_deposits:
+    total_paid = payroll_result.get('total_paid', 0)
+    users_paid = payroll_result.get('users_paid', 0)
+    
+    if users_paid == 0:
         embed = build_status_embed(
             title="💰 Payroll Status",
-            description="🏜️ There are no unpaid harvests to process.",
+            description="🏜️ There are no users with pending melange to pay.",
             color=0x95A5A6,
             footer=f"Requested by {interaction.user.display_name}",
             timestamp=interaction.created_at
@@ -44,36 +48,14 @@ async def payroll(interaction, use_followup: bool = True):
         await send_response(interaction, embed=embed.build(), use_followup=use_followup)
         return
     
-    # Group deposits by user
-    user_deposits = {}
-    for deposit in unpaid_deposits:
-        user_id = deposit['user_id']
-        if user_id not in user_deposits:
-            user_deposits[user_id] = []
-        user_deposits[user_id].append(deposit)
-    
-    # Mark all deposits as paid using utility function
-    total_paid = 0
-    users_paid = 0
-    
-    for user_id, deposits_list in user_deposits.items():
-        _, update_time = await timed_database_operation(
-            "mark_all_user_deposits_paid",
-            get_database().mark_all_user_deposits_paid,
-            user_id
-        )
-        user_total = sum(deposit['sand_amount'] for deposit in deposits_list)
-        total_paid += user_total
-        users_paid += 1
-    
     # Use utility function for embed building
     fields = {
-        "📊 Payroll Summary": f"**Total Spice Sand Paid:** {total_paid:,}\n**Harvesters Paid:** {users_paid}\n**Total Harvests:** {len(unpaid_deposits)}"
+        "💰 Payroll Summary": f"**Total Melange Paid:** {total_paid:,}\n**Users Paid:** {users_paid}"
     }
     
     embed = build_status_embed(
         title="💰 Guild Payroll Complete",
-        description="**All harvesters have been paid for their harvests!**",
+        description="**All users with pending melange have been paid!**",
         color=0x27AE60,
         fields=fields,
         footer=f"Guild payroll processed by {interaction.user.display_name}",
@@ -88,17 +70,16 @@ async def payroll(interaction, use_followup: bool = True):
     # Log performance metrics using utility function
     total_time = time.time() - command_start
     log_command_metrics(
-        "Payroll",
+        "Melange Payroll",
         str(interaction.user.id),
         interaction.user.display_name,
         total_time,
         admin_id=str(interaction.user.id),
         admin_username=interaction.user.display_name,
-        get_deposits_time=f"{get_deposits_time:.3f}s",
+        payroll_time=f"{payroll_time:.3f}s",
         response_time=f"{response_time:.3f}s",
-        total_paid=total_paid,
-        users_paid=users_paid,
-        total_harvests=len(unpaid_deposits)
+        melange_paid=total_paid,
+        users_paid=users_paid
     )
     
-    print(f'Guild payroll of {total_paid:,} spice sand to {interaction.user.display_name} ({interaction.user.id})')
+    print(f'Payroll processed by {interaction.user.display_name} ({interaction.user.id}) - {users_paid} users paid {total_paid:,} melange')

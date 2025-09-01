@@ -4,15 +4,16 @@
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table - stores Discord user information
+-- Users table - stores Discord user information and melange tracking
 CREATE TABLE users (
     user_id TEXT PRIMARY KEY,
     username TEXT NOT NULL,
     total_melange INTEGER DEFAULT 0,
+    paid_melange INTEGER DEFAULT 0,
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Deposits table - tracks spice sand deposits for users
+-- Deposits table - tracks spice sand deposits for users (sand accumulates toward melange)
 CREATE TABLE deposits (
     id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -20,9 +21,7 @@ CREATE TABLE deposits (
     sand_amount INTEGER NOT NULL,
     type TEXT DEFAULT 'solo' CHECK (type IN ('solo', 'expedition')),
     expedition_id INTEGER,
-    paid BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    paid_at TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY (user_id) REFERENCES users (user_id)
 );
 
@@ -84,9 +83,21 @@ CREATE TABLE guild_transactions (
     FOREIGN KEY (expedition_id) REFERENCES expeditions (id)
 );
 
+-- Melange payments table - tracks when melange is paid out to users
+CREATE TABLE melange_payments (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    melange_amount INTEGER NOT NULL,
+    admin_user_id TEXT,
+    admin_username TEXT,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (user_id)
+);
+
 -- Performance indexes
 CREATE INDEX idx_deposits_user_id ON deposits (user_id);
-CREATE INDEX idx_deposits_paid ON deposits (paid);
 CREATE INDEX idx_deposits_created_at ON deposits (created_at);
 CREATE INDEX idx_deposits_type ON deposits (type);
 CREATE INDEX idx_deposits_expedition_id ON deposits (expedition_id);
@@ -100,6 +111,9 @@ CREATE INDEX idx_expedition_participants_user_id ON expedition_participants (use
 CREATE INDEX idx_guild_transactions_type ON guild_transactions (transaction_type);
 CREATE INDEX idx_guild_transactions_created_at ON guild_transactions (created_at);
 CREATE INDEX idx_guild_transactions_expedition_id ON guild_transactions (expedition_id);
+
+CREATE INDEX idx_melange_payments_user_id ON melange_payments (user_id);
+CREATE INDEX idx_melange_payments_created_at ON melange_payments (created_at);
 
 -- Default configuration
 INSERT INTO settings (key, value) VALUES ('sand_per_melange', '50');
@@ -116,15 +130,14 @@ SELECT
     u.user_id,
     u.username,
     u.total_melange,
+    u.paid_melange,
+    (u.total_melange - u.paid_melange) as pending_melange,
     u.last_updated,
-    COALESCE(SUM(CASE WHEN d.paid = FALSE THEN d.sand_amount ELSE 0 END), 0) as unpaid_sand,
-    COALESCE(SUM(CASE WHEN d.paid = TRUE THEN d.sand_amount ELSE 0 END), 0) as paid_sand,
     COALESCE(SUM(d.sand_amount), 0) as total_sand,
-    COUNT(d.id) as total_deposits,
-    COUNT(CASE WHEN d.paid = FALSE THEN 1 END) as unpaid_deposits
+    COUNT(d.id) as total_deposits
 FROM users u
 LEFT JOIN deposits d ON u.user_id = d.user_id
-GROUP BY u.user_id, u.username, u.total_melange, u.last_updated;
+GROUP BY u.user_id, u.username, u.total_melange, u.paid_melange, u.last_updated;
 
 -- Leaderboard view
 CREATE VIEW leaderboard AS
@@ -132,13 +145,15 @@ SELECT
     u.user_id,
     u.username,
     u.total_melange,
-    COALESCE(SUM(CASE WHEN d.paid = FALSE THEN d.sand_amount ELSE 0 END), 0) as unpaid_sand,
+    u.paid_melange,
+    (u.total_melange - u.paid_melange) as pending_melange,
+    COALESCE(SUM(d.sand_amount), 0) as total_sand,
     COUNT(d.id) as total_deposits,
     u.last_updated
 FROM users u
 LEFT JOIN deposits d ON u.user_id = d.user_id
-GROUP BY u.user_id, u.username, u.total_melange, u.last_updated
-ORDER BY u.total_melange DESC, unpaid_sand DESC;
+GROUP BY u.user_id, u.username, u.total_melange, u.paid_melange, u.last_updated
+ORDER BY u.total_melange DESC, pending_melange DESC;
 
 -- Expedition summary view
 CREATE VIEW expedition_summary AS
@@ -172,13 +187,14 @@ CREATE TRIGGER update_users_timestamp
     EXECUTE FUNCTION update_user_timestamp();
 
 -- Comments for documentation
-COMMENT ON TABLE users IS 'Discord user information and melange totals';
-COMMENT ON TABLE deposits IS 'Individual spice sand deposits with payment status';
+COMMENT ON TABLE users IS 'Discord user information with melange totals and payment tracking';
+COMMENT ON TABLE deposits IS 'Spice sand deposits that accumulate toward melange production';
 COMMENT ON TABLE expeditions IS 'Group expeditions with guild cuts';
 COMMENT ON TABLE expedition_participants IS 'Individual participation in expeditions';
 COMMENT ON TABLE settings IS 'Bot configuration settings';
 COMMENT ON TABLE guild_treasury IS 'This guild''s resource accumulation (per-guild database)';
 COMMENT ON TABLE guild_transactions IS 'Audit trail for guild treasury operations';
-COMMENT ON VIEW user_stats IS 'Comprehensive user statistics';
-COMMENT ON VIEW leaderboard IS 'User rankings by melange production';
+COMMENT ON TABLE melange_payments IS 'Records of melange payments made to users';
+COMMENT ON VIEW user_stats IS 'Comprehensive user statistics with pending melange';
+COMMENT ON VIEW leaderboard IS 'User rankings by melange production and pending amounts';
 COMMENT ON VIEW expedition_summary IS 'Summary statistics for expeditions';
