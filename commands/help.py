@@ -26,6 +26,7 @@ async def help(interaction, use_followup: bool = True):
                                  "**`/expedition [id]`** View expedition details\n"
                                  "**`/leaderboard [limit]`** Top refiners (5-25 users)\n"
                                  "**`/split [sand] [@users]`** Split sand→melange with guild cut\n"
+                                 "**`/fixedratecut [sand] [@users] [optional: fixed rate percent Default - 5]`** Split a fixed percentage of sand→melange between users with leftover going to guild\n"
                                  "**`/help`** Show all commands",
         "⚙️ Admin Commands": "**`/pending`** View pending melange payments\n"
                                    "**`/pay [user] [amount]`** Process user payment (full or partial)\n"
@@ -37,6 +38,7 @@ async def help(interaction, use_followup: bool = True):
 
         "💡 Examples": "• `/sand 250` → 5 melange\n"
                             "• `/split 1000 @user1 @user2` → 500 each\n"
+                            "• `/fixedratecut 75000 @user1 @user2 10` → 7500 sand/150 melange each\n"
                             "• `/pay @user` → pay pending melange\n"
                             "• `/payroll` → pay all users"
     }
@@ -50,3 +52,4 @@ async def help(interaction, use_followup: bool = True):
     )
     
     await send_response(interaction, embed=embed.build(), use_followup=use_followup, ephemeral=True)
+

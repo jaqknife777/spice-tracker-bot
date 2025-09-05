@@ -65,7 +65,12 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
   - **Guild Cut:** Percentage taken off the top (default: 10%)
   - **User Percentages:** Users with percentages get exact amounts, others split equally
   - **Creates:** Expedition records and tracks melange owed for payout
-
+- **`/fixedratecut <total_sand> <users> [optional: rate]`** - Alternative split - Give each user a fixed % payout of spice and the leftover goes to guild
+  - **Example:** `/split 10000 "@harvester @scout @pilot" 15`
+  - **Guild Cut:** All leftover sand goes to guild
+  - **User Percentages:** Equal percent cuts for each user (default: 5%)
+  - **Creates:** Expedition records and tracks melange owed for payout
+  
 ### 🏛️ Guild Admin Commands
 - **`/pending`** - View all users with pending melange payments and amounts owed
 - **`/payment <user>`** - Process payment for a specific harvester's deposits
@@ -194,4 +199,5 @@ python -m pytest tests/ --cov=. --cov-report=html
 **🎮 Game:** Dune: Awakening  
 **🚀 Status:** Production Ready  
 **📊 Deployment:** Fly.io + Supabase  
+
 **🧪 Tests:** 46 passing ✅

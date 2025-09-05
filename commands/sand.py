@@ -6,10 +6,13 @@ Sand command for logging spice sand harvests and calculating melange conversion.
 COMMAND_METADATA = {
     'aliases': [],  # formerly named 'harvest'
     'description': "Convert spice sand into melange (primary currency)",
-    'params': {'amount': "Amount of spice sand to convert"}
+    'params': {
+        'amount': "Amount of spice sand to convert",
+        'landsraad_bonus': "Whether or not to apply the 25% Landsraad crafting reduction (default: false)." }
 }
 
 import time
+import math
 from utils.database_utils import timed_database_operation, validate_user_exists
 from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
@@ -18,34 +21,34 @@ from utils.helpers import get_database, get_sand_per_melange, send_response
 
 
 @handle_interaction_expiration
-async def sand(interaction, amount: int, use_followup: bool = True):
+async def sand(interaction, amount: int, landsraad_bonus: bool = False, use_followup: bool = True):
     """Convert spice sand into melange (primary currency)"""
     command_start = time.time()
-    
+
     # Validate amount
     if not 1 <= amount <= 10000:
         await send_response(interaction, "❌ Amount must be between 1 and 10,000 spice sand.", use_followup=use_followup, ephemeral=True)
         return
-    
+
     # Get conversion rate and add deposit
-    sand_per_melange = get_sand_per_melange()
-    
+    sand_per_melange = get_sand_per_melange(landsraad_bonus=landsraad_bonus)
+
     # Database operations with timing using utility functions
-    
+
     # Add deposit with timing
     _, add_deposit_time = await timed_database_operation(
         "add_deposit",
         get_database().add_deposit,
         str(interaction.user.id), interaction.user.display_name, amount
     )
-    
+
     # Ensure user exists and get their data
     user = await validate_user_exists(get_database(), str(interaction.user.id), interaction.user.display_name)
-    
+
     # Convert sand directly to melange
-    new_melange = amount // sand_per_melange
+    new_melange = math.ceil(amount / sand_per_melange) if sand_per_melange > 0 else 0
     current_melange = user.get('total_melange', 0)
-    
+
     # Only update melange if we have new melange to add
     update_melange_time = 0
     if new_melange > 0:
@@ -54,16 +57,15 @@ async def sand(interaction, amount: int, use_followup: bool = True):
             get_database().update_user_melange,
             str(interaction.user.id), new_melange
         )
-    
+
     # Build concise response
-    leftover_sand = amount % sand_per_melange
     description = f"🎉 **+{new_melange:,} melange**" if new_melange > 0 else f"📦 **{amount:,} sand processed**"
-    
+
     fields = {
         "💎 Total": f"{(current_melange + new_melange):,} melange",
-        "⚙️ Converted": f"{amount:,} sand → {new_melange:,} melange" + (f" ({leftover_sand} unused)" if leftover_sand > 0 else "")
+        "⚙️ Converted": f"{amount:,} sand → {new_melange:,} melange"
     }
-    
+
     embed = build_status_embed(
         title="🏜️ Conversion Complete",
         description=description,
@@ -71,12 +73,12 @@ async def sand(interaction, amount: int, use_followup: bool = True):
         fields=fields,
         timestamp=interaction.created_at
     )
-    
+
     # Send response using helper function
     response_start = time.time()
     await send_response(interaction, embed=embed.build(), use_followup=use_followup)
     response_time = time.time() - response_start
-    
+
     # Log performance metrics using utility function
     total_time = time.time() - command_start
     log_command_metrics(

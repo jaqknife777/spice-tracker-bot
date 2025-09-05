@@ -42,9 +42,13 @@ class TestHelpers:
     
     def test_get_sand_per_melange(self):
         """Test getting sand per melange conversion rate."""
+        # Test default rate
         rate = get_sand_per_melange()
-        assert isinstance(rate, int)
-        assert rate > 0
+        assert rate == 50
+
+        # Test Landsraad bonus rate
+        rate = get_sand_per_melange(landsraad_bonus=True)
+        assert rate == 37.5
     
     @pytest.mark.asyncio
     async def test_send_response_interaction(self, mock_interaction):
