@@ -139,7 +139,9 @@ class TestDiscordResponseErrors:
     @pytest.mark.asyncio
     async def test_command_handles_broken_responses(self, mock_interaction_broken):
         """Test that commands handle broken Discord responses gracefully."""
-        with patch('utils.helpers.get_database') as mock_get_db:
+        with patch('utils.helpers.get_database') as mock_get_db, \
+             patch('utils.logger.logger') as mock_logger:
+            
             mock_db = AsyncMock()
             mock_db.get_user.return_value = {
                 'user_id': '123456789',
@@ -160,7 +162,9 @@ class TestDiscordResponseErrors:
     @pytest.mark.asyncio
     async def test_send_response_fallback_mechanism(self, mock_interaction_broken):
         """Test that send_response falls back to channel.send when followup fails."""
-        with patch('utils.helpers.send_response') as mock_send_response:
+        with patch('utils.helpers.send_response') as mock_send_response, \
+             patch('utils.logger.logger') as mock_logger:
+            
             # Make send_response raise an exception
             mock_send_response.side_effect = Exception("All response methods failed")
             
@@ -210,7 +214,7 @@ class TestReactionHandlingErrors:
     async def test_reaction_handles_broken_message_edit(self, mock_reaction_broken, mock_user_broken):
         """Test that reaction handling works when message editing fails."""
         with patch('bot.bot') as mock_bot, \
-             patch('utils.logger.logger.error') as mock_logger:
+             patch('utils.logger.logger') as mock_logger:
             
             from bot import on_reaction_add
             
@@ -218,7 +222,7 @@ class TestReactionHandlingErrors:
             await on_reaction_add(mock_reaction_broken, mock_user_broken)
             
             # Should log the error
-            mock_logger.assert_called()
+            mock_logger.error.assert_called()
     
     @pytest.mark.asyncio
     async def test_reaction_handles_missing_embeds(self, mock_user_broken):

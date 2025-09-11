@@ -16,13 +16,14 @@ class TestDiscordResponseHandling:
     @pytest.fixture
     def mock_interaction_complete(self):
         """Create a mock interaction that hasn't been responded to."""
+        from datetime import datetime
+        
         interaction = Mock()
         interaction.user.id = 123456789
         interaction.user.display_name = "TestUser"
         interaction.user.display_avatar = Mock()
         interaction.user.display_avatar.url = "https://example.com/avatar.png"
-        interaction.created_at = Mock()
-        interaction.created_at.timestamp.return_value = 1640995200.0
+        interaction.created_at = datetime.fromtimestamp(1640995200.0)
         interaction.guild = Mock()
         interaction.guild.id = 987654321
         interaction.guild.name = "TestGuild"
@@ -52,15 +53,22 @@ class TestDiscordResponseHandling:
     @pytest.mark.asyncio
     async def test_water_command_response_handling(self, mock_interaction_complete):
         """Test that water command handles responses correctly."""
-        with patch('utils.helpers.send_response') as mock_send_response:
+        with patch('utils.helpers.send_response') as mock_send_response, \
+             patch('utils.logger.logger') as mock_logger:
+            
             mock_send_response.return_value = None
             
             # Mock channel history for reaction adding
             mock_message = Mock()
             mock_message.author = mock_interaction_complete.client
             mock_message.embeds = [Mock()]
-            mock_interaction_complete.channel.history.return_value.__aiter__.return_value = [mock_message]
             mock_message.add_reaction = AsyncMock()
+            
+            # Create a proper async iterator for channel history
+            async def mock_history_iterator():
+                yield mock_message
+            
+            mock_interaction_complete.channel.history.return_value = mock_history_iterator()
             
             await water(mock_interaction_complete, "Test Location", use_followup=True)
             
@@ -76,7 +84,8 @@ class TestDiscordResponseHandling:
     async def test_sand_command_response_handling(self, mock_interaction_complete):
         """Test that sand command handles responses correctly."""
         with patch('utils.helpers.get_database') as mock_get_db, \
-             patch('utils.helpers.send_response') as mock_send_response:
+             patch('utils.helpers.send_response') as mock_send_response, \
+             patch('utils.logger.logger') as mock_logger:
             
             mock_db = AsyncMock()
             mock_db.get_user.return_value = {
@@ -86,6 +95,7 @@ class TestDiscordResponseHandling:
                 'paid_melange': 50
             }
             mock_db.update_user_melange.return_value = None
+            mock_db.add_deposit.return_value = None
             mock_get_db.return_value = mock_db
             mock_send_response.return_value = None
             
@@ -98,7 +108,8 @@ class TestDiscordResponseHandling:
     async def test_refinery_command_response_handling(self, mock_interaction_complete):
         """Test that refinery command handles responses correctly."""
         with patch('utils.helpers.get_database') as mock_get_db, \
-             patch('utils.helpers.send_response') as mock_send_response:
+             patch('utils.helpers.send_response') as mock_send_response, \
+             patch('utils.logger.logger') as mock_logger:
             
             mock_db = AsyncMock()
             mock_db.get_user.return_value = {
@@ -168,7 +179,7 @@ class TestDiscordReactionHandling:
     async def test_water_reaction_handling(self, mock_reaction, mock_user):
         """Test that water delivery reactions are handled correctly."""
         with patch('bot.bot') as mock_bot, \
-             patch('utils.logger.logger.info') as mock_logger:
+             patch('utils.logger.logger') as mock_logger:
             
             # Mock the bot's fetch_user method
             mock_requester = Mock()
@@ -187,7 +198,7 @@ class TestDiscordReactionHandling:
             mock_requester.send.assert_called_once()
             
             # Verify logging occurred
-            mock_logger.assert_called()
+            mock_logger.info.assert_called()
     
     @pytest.mark.asyncio
     async def test_reaction_ignores_bot_reactions(self, mock_reaction):
@@ -227,7 +238,7 @@ class TestDiscordReactionHandling:
         mock_reaction.message.edit.side_effect = Exception("Edit failed")
         
         with patch('bot.bot') as mock_bot, \
-             patch('utils.logger.logger.error') as mock_logger:
+             patch('utils.logger.logger') as mock_logger:
             
             from bot import on_reaction_add
             
@@ -235,7 +246,7 @@ class TestDiscordReactionHandling:
             await on_reaction_add(mock_reaction, mock_user)
             
             # Should log the error
-            mock_logger.assert_called()
+            mock_logger.error.assert_called()
 
 
 class TestDiscordEmbedStructure:

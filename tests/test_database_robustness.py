@@ -226,10 +226,27 @@ class TestDatabaseErrorHandling:
             mock_conn = AsyncMock()
             mock_conn.fetchrow.return_value = None
             
-            mock_get_conn.side_effect = [
-                asyncpg.ConnectionDoesNotExistError("Connection failed"),
-                mock_conn
-            ]
+            # Create a proper async context manager
+            class MockContextManager:
+                def __init__(self, conn):
+                    self.conn = conn
+                
+                async def __aenter__(self):
+                    return self.conn
+                
+                async def __aexit__(self, exc_type, exc_val, exc_tb):
+                    pass
+            
+            # First call raises exception, second call succeeds
+            call_count = 0
+            def side_effect(*args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    raise asyncpg.ConnectionDoesNotExistError("Connection failed")
+                return MockContextManager(mock_conn)
+            
+            mock_get_conn.side_effect = side_effect
             
             db = Database("test://url")
             
@@ -243,7 +260,7 @@ class TestDatabaseErrorHandling:
         with patch.object(Database, '_get_connection') as mock_get_conn:
             mock_get_conn.side_effect = Exception("Database error")
             
-            with patch('utils.logger.logger.database_operation') as mock_logger:
+            with patch('database.logger.database_operation') as mock_logger:
                 db = Database("test://url")
                 
                 with pytest.raises(Exception):

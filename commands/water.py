@@ -41,7 +41,7 @@ async def water(interaction, destination: str = "DD base", use_followup: bool = 
             "📋 Status": "⏳ Pending admin approval"
         },
         thumbnail=interaction.user.display_avatar.url,
-        timestamp=interaction.created_at
+        timestamp=interaction.created_at if hasattr(interaction.created_at, 'timestamp') else None
     )
 
     # Send the water request message
