@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 # Import utility modules
 from utils.logger import logger
 from utils.helpers import get_database
+from utils.base_command import log_permission_overrides
 
 # Import command metadata (currently unused but kept for future use)
 # from commands import COMMAND_METADATA
@@ -49,9 +50,9 @@ async def on_ready():
         else:
             logger.bot_event("Bot started - Unknown")
             logger.info("Bot is online")
-        
+
         logger.info("Starting bot initialization")
-        
+
         # Test database connectivity
         try:
             logger.info("Testing database connection")
@@ -59,31 +60,31 @@ async def on_ready():
             await get_database().initialize()
             db_init_time = time.time() - db_init_start
             logger.bot_event("Database connection verified", db_init_time=f"{db_init_time:.3f}s")
-                
+
         except Exception as error:
             db_init_time = time.time() - db_init_start
             logger.bot_event(f"Database connection failed: {error}", db_init_time=f"{db_init_time:.3f}s")
             logger.error(f"Database connection failed in {db_init_time:.3f}s", error=str(error), error_type=type(error).__name__)
             logger.debug("Database connection failure traceback", traceback=traceback.format_exc())
             return
-        
+
         # Register commands BEFORE syncing
         logger.info("Registering commands")
         register_start = time.time()
         register_commands()
         register_time = time.time() - register_start
         logger.info("Command registration completed", register_time=f"{register_time:.3f}s")
-        
+
         # Auto-sync commands on startup (can be disabled with AUTO_SYNC_COMMANDS=false)
         auto_sync = os.getenv('AUTO_SYNC_COMMANDS', 'true').lower() == 'true'
         if auto_sync:
             try:
                 logger.info("Auto-syncing commands (global + guild)")
-                
+
                 # Global sync first to update all guilds
                 global_synced = await bot.tree.sync()
                 logger.info("Global sync completed", commands_synced=len(global_synced))
-                
+
                 # Guild-specific sync for immediate effect in current guilds
                 guild_sync_count = 0
                 for guild in bot.guilds:
@@ -93,23 +94,26 @@ async def on_ready():
                         logger.info("Guild sync completed", guild_name=guild.name, commands_synced=len(guild_synced))
                     except Exception as guild_error:
                         logger.warning("Guild sync failed", guild_name=guild.name, error=str(guild_error))
-                
+
                 logger.info("Auto-sync completed", global_commands=len(global_synced), guild_commands=guild_sync_count)
-                
+
             except Exception as sync_error:
                 logger.error("Auto-sync failed", error=str(sync_error))
                 logger.debug("Auto-sync failure traceback", traceback=traceback.format_exc())
-        
+
         logger.info("Bot is ready! Use /sync command to sync slash commands")
-        
+
+        # Log permission overrides if any are configured
+        log_permission_overrides()
+
         # Log total bot startup time
         total_startup_time = time.time() - bot_start_time
-        logger.bot_event(f"Bot startup completed", 
+        logger.bot_event(f"Bot startup completed",
                          total_startup_time=f"{total_startup_time:.3f}s",
                          db_init_time=f"{db_init_time:.3f}s",
                          guild_count=len(bot.guilds))
         logger.info("Bot startup completed", total_startup_time=f"{total_startup_time:.3f}s")
-            
+
     except Exception as error:
         total_startup_time = time.time() - bot_start_time
         logger.error("CRITICAL ERROR in on_ready", error=str(error), error_type=type(error).__name__, startup_time=f"{total_startup_time:.3f}s")
@@ -121,26 +125,26 @@ async def on_ready():
 def register_commands():
     """Register all commands explicitly with their exact signatures"""
     from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, payment, payroll, treasury, guild_withdraw, pending, water
-    
+
     # Sand command (formerly harvest)
     @bot.tree.command(name="sand", description="Convert spice sand into melange (50:1 ratio)")
     @app_commands.describe(amount="Amount of spice sand to convert (1-10,000)")
     async def sand_cmd(interaction: discord.Interaction, amount: int):  # noqa: F841
         await sand(interaction, amount, True)
-    
+
     # Refinery command
     @bot.tree.command(name="refinery", description="View your melange production and payment status")
     async def refinery_cmd(interaction: discord.Interaction):  # noqa: F841
         await refinery(interaction, True)
-    
+
     # Leaderboard command
     @bot.tree.command(name="leaderboard", description="Display top spice refiners by melange production")
     @app_commands.describe(limit="Number of top refiners to display (5-25, default: 10)")
     async def leaderboard_cmd(interaction: discord.Interaction, limit: int = 10):  # noqa: F841
         await leaderboard(interaction, limit, True)
-    
 
-    
+
+
     # Split command
     @bot.tree.command(name="split", description="Split spice sand among expedition members and convert to melange")
     @app_commands.describe(
@@ -150,29 +154,29 @@ def register_commands():
     )
     async def split_cmd(interaction: discord.Interaction, total_sand: int, users: str, guild: int = 10):  # noqa: F841
         await split(interaction, total_sand, users, guild, True)
-    
+
     # Help command
     @bot.tree.command(name="help", description="Show all available spice tracking commands")
     async def help_cmd(interaction: discord.Interaction):  # noqa: F841
         await help(interaction, True)
-    
+
     # Reset command
     @bot.tree.command(name="reset", description="Reset all spice refinery statistics (Admin only - USE WITH CAUTION)")
     @app_commands.describe(confirm="Confirm that you want to delete all refinery data (True/False)")
     async def reset_cmd(interaction: discord.Interaction, confirm: bool):  # noqa: F841
         await reset(interaction, confirm, True)
-    
+
     # Ledger command
     @bot.tree.command(name="ledger", description="View your complete spice harvest ledger")
     async def ledger_cmd(interaction: discord.Interaction):  # noqa: F841
         await ledger(interaction, True)
-    
+
     # Expedition command
     @bot.tree.command(name="expedition", description="View details of a specific expedition")
     @app_commands.describe(expedition_id="ID of the expedition to view")
     async def expedition_cmd(interaction: discord.Interaction, expedition_id: int):  # noqa: F841
         await expedition(interaction, expedition_id, True)
-    
+
     # Pay command (formerly payment)
     @bot.tree.command(name="pay", description="Process melange payment for a user (Admin only)")
     @app_commands.describe(
@@ -181,17 +185,17 @@ def register_commands():
     )
     async def pay_cmd(interaction: discord.Interaction, user: discord.Member, amount: int = None):  # noqa: F841
         await payment(interaction, user, amount, True)
-    
+
     # Payroll command
     @bot.tree.command(name="payroll", description="Process payments for all unpaid harvesters (Admin only)")
     async def payroll_cmd(interaction: discord.Interaction):  # noqa: F841
         await payroll(interaction, True)
-    
+
     # Treasury command
     @bot.tree.command(name="treasury", description="View guild treasury balance and statistics")
     async def treasury_cmd(interaction: discord.Interaction):  # noqa: F841
         await treasury(interaction, True)
-    
+
     # Guild Withdraw command
     @bot.tree.command(name="guild_withdraw", description="Withdraw sand from guild treasury to give to a user (Admin only)")
     @app_commands.describe(
@@ -200,32 +204,32 @@ def register_commands():
     )
     async def guild_withdraw_cmd(interaction: discord.Interaction, user: discord.Member, amount: int):  # noqa: F841
         await guild_withdraw(interaction, user, amount, True)
-    
+
     # Pending command
     @bot.tree.command(name="pending", description="View all users with pending melange payments (Admin only)")
     async def pending_cmd(interaction: discord.Interaction):  # noqa: F841
         await pending(interaction, True)
-    
+
     # Water command
     @bot.tree.command(name="water", description="Request a water delivery to a specific location")
     @app_commands.describe(destination="Destination for water delivery (default: DD base)")
     async def water_cmd(interaction: discord.Interaction, destination: str = "DD base"):  # noqa: F841
         await water(interaction, destination, True)
-    
+
     # Sync command (slash command version)
     @bot.tree.command(name="sync", description="Sync slash commands (Bot Owner Only)")
     async def sync_cmd(interaction: discord.Interaction):  # noqa: F841
         if interaction.user.id != int(os.getenv('BOT_OWNER_ID', '0')):
             await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
             return
-        
+
         try:
             await interaction.response.defer(ephemeral=True)
             synced = await bot.tree.sync()
             await interaction.followup.send(f"✅ Synced {len(synced)} commands successfully!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Error syncing commands: {e}", ephemeral=True)
-    
+
     logger.info("Registered all commands explicitly")
 
 
@@ -275,7 +279,7 @@ bot.add_command(sync)
 @bot.event
 async def on_command_error(ctx, error):
     error_start = time.time()
-    logger.error("Command error", event_type="command_error", 
+    logger.error("Command error", event_type="command_error",
                  command=ctx.command.name if ctx.command else "unknown",
                  user_id=str(ctx.author.id) if ctx.author else "unknown",
                  username=ctx.author.display_name if ctx.author else "unknown",
@@ -293,7 +297,7 @@ async def on_reaction_add(reaction, user):
     # Ignore bot's own reactions
     if user.bot:
         return
-    
+
     # Check if it's a checkmark reaction on a water delivery request
     if str(reaction.emoji) == "✅":
         try:
@@ -308,7 +312,7 @@ async def on_reaction_add(reaction, user):
                         if field.name == "👤 Requester":
                             requester_mention = field.value
                             break
-                    
+
                     if requester_mention:
                         # Update the embed to show completion
                         updated_embed = discord.Embed(
@@ -317,7 +321,7 @@ async def on_reaction_add(reaction, user):
                             color=0x27AE60,  # Green color for completed
                             timestamp=message.created_at
                         )
-                        
+
                         # Copy all fields but update status
                         for field in embed.fields:
                             if field.name == "📋 Status":
@@ -332,17 +336,17 @@ async def on_reaction_add(reaction, user):
                                     value=field.value,
                                     inline=field.inline
                                 )
-                        
+
                         # Add completion info
                         updated_embed.add_field(
                             name="✅ Completed by",
                             value=f"{user.mention}",
                             inline=False
                         )
-                        
+
                         # Update the message
                         await message.edit(embed=updated_embed)
-                        
+
                         # Send notification to the original requester
                         try:
                             # Extract user ID from mention
@@ -361,18 +365,18 @@ async def on_reaction_add(reaction, user):
                                         value=embed.description.replace("**Location:** ", ""),
                                         inline=False
                                     )
-                                    
+
                                     await requester.send(embed=notification_embed)
                         except Exception as e:
                             logger.warning(f"Could not send notification to requester: {e}")
-                        
+
                         # Log the completion
-                        logger.info(f"Water delivery completed by admin", 
+                        logger.info(f"Water delivery completed by admin",
                                    admin_user_id=str(user.id),
                                    admin_username=user.display_name,
                                    requester_mention=requester_mention,
                                    guild_id=str(message.guild.id) if message.guild else None)
-        
+
         except Exception as e:
             logger.error(f"Error handling water delivery reaction: {e}")
 
@@ -383,14 +387,14 @@ def start_health_server():
     class HealthHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             request_start = time.time()
-            
+
             if self.path == '/health':
                 self.send_response(200)
                 self.send_header('Content-type', 'text/plain')
                 self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
                 self.send_header('Connection', 'keep-alive')
                 self.end_headers()
-                
+
                 # Return bot status information
                 status = {
                     'status': 'healthy',
@@ -399,34 +403,34 @@ def start_health_server():
                     'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
                 }
                 self.wfile.write(str(status).encode())
-                
+
                 request_time = time.time() - request_start
-                logger.info(f"Health check request completed", 
+                logger.info(f"Health check request completed",
                            request_time=f"{request_time:.3f}s",
                            bot_ready=bot.is_ready(),
                            guild_count=len(bot.guilds))
-                
+
             elif self.path == '/ping':
                 self.send_response(200)
                 self.send_header('Content-type', 'text/plain')
                 self.end_headers()
                 self.wfile.write(b'pong')
-                
+
                 request_time = time.time() - request_start
                 logger.info(f"Ping request completed", request_time=f"{request_time:.3f}s")
-                
+
             else:
                 self.send_response(404)
                 self.end_headers()
-                
+
                 request_time = time.time() - request_start
-                logger.warning(f"Invalid health check request", 
-                               path=self.path, 
+                logger.warning(f"Invalid health check request",
+                               path=self.path,
                                request_time=f"{request_time:.3f}s")
-        
+
         def log_message(self, format, *args):
             pass  # Suppress HTTP server logs
-    
+
     try:
         port = int(os.getenv('PORT', 8080))
         with socketserver.TCPServer(("", port), HealthHandler) as httpd:
@@ -442,7 +446,7 @@ if __name__ == '__main__':
     # Start health check server in a separate thread for Fly.io
     health_thread = threading.Thread(target=start_health_server, daemon=True)
     health_thread.start()
-    
+
     # Start a keep-alive thread to prevent machine from going idle
     def keep_alive():
         """Send periodic pings to keep the machine alive"""
@@ -454,37 +458,37 @@ if __name__ == '__main__':
                 response = requests.get('http://localhost:8080/ping', timeout=5)
                 ping_time = time.time() - ping_start
                 ping_count += 1
-                
-                logger.info(f"Keep-alive ping completed", 
+
+                logger.info(f"Keep-alive ping completed",
                            ping_count=ping_count,
                            ping_time=f"{ping_time:.3f}s",
                            status_code=response.status_code)
-                
+
             except Exception as e:
                 ping_count += 1
-                logger.warning(f"Keep-alive ping failed", 
+                logger.warning(f"Keep-alive ping failed",
                                ping_count=ping_count,
                                error=str(e))
                 pass  # Ignore errors, just keep trying
-    
+
     keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
     keep_alive_thread.start()
-    
+
     token = os.getenv('DISCORD_TOKEN')
     if not token:
         logger.error("DISCORD_TOKEN environment variable is not set")
         logger.error("Please set the DISCORD_TOKEN environment variable in Fly.io or your .env file")
         exit(1)
-    
+
     startup_start = time.time()
     logger.bot_event(f"Bot starting - Token present: {bool(token)}")
     logger.info("Starting Discord bot")
-    
+
     try:
         bot.run(token)
     except Exception as e:
         startup_time = time.time() - startup_start
-        logger.error(f"Bot startup failed", 
+        logger.error(f"Bot startup failed",
                      startup_time=f"{startup_time:.3f}s",
                      error=str(e))
         raise e

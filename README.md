@@ -90,7 +90,7 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
 
 Result (15% guild cut):
 - Guild Treasury: 1500 sand → 30 melange
-- Harvester: 2550 sand (30% of remaining) → 51 melange  
+- Harvester: 2550 sand (30% of remaining) → 51 melange
 - Scout: 2975 sand (35% of remaining) → 59 melange
 - Pilot: 2975 sand (35% of remaining) → 59 melange
 ```
@@ -151,6 +151,7 @@ The bot includes:
 | `DATABASE_URL` | Supabase PostgreSQL connection string | ✅ | - |
 | `BOT_OWNER_ID` | Discord user ID for bot owner commands | ✅ | - |
 | `AUTO_SYNC_COMMANDS` | Auto-sync slash commands on startup | ❌ | `true` |
+| `COMMAND_PERMISSION_OVERRIDES` | Override command permissions (format: `cmd:level`) | ❌ | - |
 
 ## 🛡️ Permissions
 
@@ -159,10 +160,27 @@ The bot includes:
 - **👑 Owner Commands:** Bot owner only (sync, advanced debugging)
 - **🔒 Private Responses:** Personal financial data sent as ephemeral messages
 
+### Permission Overrides
+
+Override command permissions via environment variable for testing or emergency situations:
+
+```bash
+# Make reset command officer-only instead of admin
+export COMMAND_PERMISSION_OVERRIDES="reset:officer"
+
+# Make sand command public
+export COMMAND_PERMISSION_OVERRIDES="sand:any"
+
+# Multiple overrides
+export COMMAND_PERMISSION_OVERRIDES="reset:officer,sand:any,help:user"
+```
+
+**Permission Levels:** `admin` → `officer` → `user` → `any` (public)
+
 ## ⚡ Performance Features
 
 - **🚀 Fast Startup:** < 2 second boot time with automatic command sync
-- **📊 Structured Logging:** Production-ready logging with Fly.io integration  
+- **📊 Structured Logging:** Production-ready logging with Fly.io integration
 - **🔄 Connection Pooling:** Efficient database connections with automatic retry
 - **⚡ Async Operations:** Non-blocking Discord interactions and database queries
 - **🛡️ Error Recovery:** Graceful handling of database and Discord API failures
@@ -177,21 +195,3 @@ python -m pytest tests/ -v
 # Run with coverage
 python -m pytest tests/ --cov=. --cov-report=html
 ```
-
-**Test Coverage:** 46 tests covering command functionality, database operations, and utility functions.
-
-## 📝 Recent Updates
-
-- **✅ Command Rename:** `/harvest` → `/sand` for better game alignment
-- **✅ Auto-Sync:** Commands sync automatically on bot startup
-- **✅ Structured Logging:** Professional logging system for production monitoring
-- **✅ Bug Fixes:** Resolved timestamp handling and database schema issues
-- **✅ Payment System:** Complete melange payment tracking and processing
-- **✅ Guild Treasury:** Advanced treasury management with audit trails
-
----
-
-**🎮 Game:** Dune: Awakening  
-**🚀 Status:** Production Ready  
-**📊 Deployment:** Fly.io + Supabase  
-**🧪 Tests:** 46 passing ✅
