@@ -38,6 +38,7 @@ The Spice Tracker Bot is a Python-based Discord bot for the game "Dune: Awakenin
 ## Code Style and Conventions
 
 - Follow Python PEP 8 style guidelines.
+- Enforce LF line endings
 - Use type hints for all function parameters and return values.
 - Keep functions small and focused on a single responsibility.
 - All database operations should be asynchronous using `async/await`.

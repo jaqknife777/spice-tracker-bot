@@ -35,20 +35,10 @@ async def refinery(interaction, use_followup: bool = True):
         return
 
     # Build melange status fields
-    last_updated = user.get('last_updated') if user else None
-    if last_updated:
-        # Handle both datetime objects and integer timestamps
-        if hasattr(last_updated, 'timestamp'):
-            # It's a datetime object
-            last_activity_timestamp = last_updated.timestamp()
-        elif isinstance(last_updated, (int, float)):
-            # It's already a Unix timestamp
-            last_activity_timestamp = float(last_updated)
-        else:
-            # Fallback to current time
-            last_activity_timestamp = interaction.created_at.timestamp()
-    else:
-        last_activity_timestamp = interaction.created_at.timestamp()
+    last_activity_timestamp = (
+        user['last_updated'].timestamp()
+        if user and user.get('last_updated') else interaction.created_at.timestamp()
+    )
 
     # Calculate pending melange
     total_melange = user.get('total_melange', 0)
