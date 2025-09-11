@@ -131,8 +131,8 @@ class Database:
                         'username': row['username'], 
                         'total_melange': row['total_melange'],
                         'paid_melange': row['paid_melange'],
-                        'created_at': row['created_at'],
-                        'last_updated': row['last_updated'] if row['last_updated'] else datetime.now()
+                        'created_at': row.get('created_at', datetime.now()),
+                        'last_updated': row.get('last_updated', datetime.now())
                     }
                     await self._log_operation("select", "users", start_time, success=True, user_id=user_id, found=True)
                     return result
@@ -204,7 +204,7 @@ class Database:
                         'sand_amount': row['sand_amount'],
                         'type': row['type'],
                         'expedition_id': row['expedition_id'],
-                        'created_at': row['created_at']
+                        'created_at': row.get('created_at', datetime.now())
                     })
                 
                 await self._log_operation("select", "deposits", start_time, success=True, 
@@ -251,8 +251,8 @@ class Database:
                     treasury = {
                         'total_sand': row['total_sand'],
                         'total_melange': row['total_melange'],
-                        'created_at': row['created_at'],
-                        'last_updated': row['last_updated']
+                        'created_at': row.get('created_at', datetime.now()),
+                        'last_updated': row.get('last_updated', datetime.now())
                     }
                 else:
                     # Create initial treasury record if none exists
@@ -420,7 +420,7 @@ class Database:
                         'total_sand': expedition_row['total_sand'],
                         'guild_cut_percentage': expedition_row['guild_cut_percentage'] or 0,
                         'sand_per_melange': expedition_row['sand_per_melange'],
-                        'created_at': expedition_row['created_at']
+                        'created_at': expedition_row.get('created_at', datetime.now())
                     },
                     'participants': participants
                 }
@@ -463,7 +463,7 @@ class Database:
                         'type': row['type'],
                         'expedition_id': row['expedition_id'],
                         'paid': bool(row['paid']),
-                        'created_at': row['created_at'] if row['created_at'] else datetime.now(),
+                        'created_at': row.get('created_at', datetime.now()),
                         'paid_at': row['paid_at'] if row['paid_at'] else None,
                         'initiator_username': row.get('initiator_username'),
                         'expedition_total': row.get('expedition_total')
