@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 from utils.logger import logger
 from utils.helpers import get_database
 
-# Import command metadata
-from commands import COMMAND_METADATA
+# Import command metadata (currently unused but kept for future use)
+# from commands import COMMAND_METADATA
 
 # Load environment variables
 load_dotenv()
@@ -120,7 +120,7 @@ async def on_ready():
 # Register commands with the bot's command tree
 def register_commands():
     """Register all commands explicitly with their exact signatures"""
-    from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, payment, payroll, treasury, guild_withdraw, pending
+    from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, payment, payroll, treasury, guild_withdraw, pending, water
     
     # Sand command (formerly harvest)
     @bot.tree.command(name="sand", description="Convert spice sand into melange (50:1 ratio)")
@@ -206,6 +206,12 @@ def register_commands():
     async def pending_cmd(interaction: discord.Interaction):  # noqa: F841
         await pending(interaction, True)
     
+    # Water command
+    @bot.tree.command(name="water", description="Request a water delivery to a specific location")
+    @app_commands.describe(destination="Destination for water delivery (default: DD base)")
+    async def water_cmd(interaction: discord.Interaction, destination: str = "DD base"):  # noqa: F841
+        await water(interaction, destination, True)
+    
     # Sync command (slash command version)
     @bot.tree.command(name="sync", description="Sync slash commands (Bot Owner Only)")
     async def sync_cmd(interaction: discord.Interaction):  # noqa: F841
@@ -280,6 +286,95 @@ async def on_error(event, *args, **kwargs):
     error_start = time.time()
     logger.error("Discord event error", event_type="discord_error",
                  event=event, args=str(args), kwargs=str(kwargs))
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    """Handle reaction additions for water delivery completion"""
+    # Ignore bot's own reactions
+    if user.bot:
+        return
+    
+    # Check if it's a checkmark reaction on a water delivery request
+    if str(reaction.emoji) == "✅":
+        try:
+            # Get the message content to check if it's a water request
+            message = reaction.message
+            if message and message.embeds:
+                embed = message.embeds[0]
+                if embed.title and "💧 Water Delivery Request" in embed.title:
+                    # Extract the requester from the embed fields
+                    requester_mention = None
+                    for field in embed.fields:
+                        if field.name == "👤 Requester":
+                            requester_mention = field.value
+                            break
+                    
+                    if requester_mention:
+                        # Update the embed to show completion
+                        updated_embed = discord.Embed(
+                            title="💧 Water Delivery Request",
+                            description=embed.description,
+                            color=0x27AE60,  # Green color for completed
+                            timestamp=message.created_at
+                        )
+                        
+                        # Copy all fields but update status
+                        for field in embed.fields:
+                            if field.name == "📋 Status":
+                                updated_embed.add_field(
+                                    name=field.name,
+                                    value="✅ Completed by admin",
+                                    inline=field.inline
+                                )
+                            else:
+                                updated_embed.add_field(
+                                    name=field.name,
+                                    value=field.value,
+                                    inline=field.inline
+                                )
+                        
+                        # Add completion info
+                        updated_embed.add_field(
+                            name="✅ Completed by",
+                            value=f"{user.mention}",
+                            inline=False
+                        )
+                        
+                        # Update the message
+                        await message.edit(embed=updated_embed)
+                        
+                        # Send notification to the original requester
+                        try:
+                            # Extract user ID from mention
+                            if requester_mention.startswith("<@") and requester_mention.endswith(">"):
+                                user_id = int(requester_mention[2:-1])
+                                requester = await bot.fetch_user(user_id)
+                                if requester:
+                                    notification_embed = discord.Embed(
+                                        title="💧 Water Delivery Complete!",
+                                        description=f"Your water delivery request has been completed by {user.mention}",
+                                        color=0x27AE60,
+                                        timestamp=discord.utils.utcnow()
+                                    )
+                                    notification_embed.add_field(
+                                        name="📍 Destination",
+                                        value=embed.description.replace("**Location:** ", ""),
+                                        inline=False
+                                    )
+                                    
+                                    await requester.send(embed=notification_embed)
+                        except Exception as e:
+                            logger.warning(f"Could not send notification to requester: {e}")
+                        
+                        # Log the completion
+                        logger.info(f"Water delivery completed by admin", 
+                                   admin_user_id=str(user.id),
+                                   admin_username=user.display_name,
+                                   requester_mention=requester_mention,
+                                   guild_id=str(message.guild.id) if message.guild else None)
+        
+        except Exception as e:
+            logger.error(f"Error handling water delivery reaction: {e}")
 
 
 # Fly.io health check endpoint

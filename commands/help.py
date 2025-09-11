@@ -26,6 +26,7 @@ async def help(interaction, use_followup: bool = True):
                                  "**`/expedition [id]`** View expedition details\n"
                                  "**`/leaderboard [limit]`** Top refiners (5-25 users)\n"
                                  "**`/split [sand] [@users]`** Split sand→melange with guild cut\n"
+                                 "**`/water [destination]`** Request water delivery\n"
                                  "**`/help`** Show all commands",
         "⚙️ Admin Commands": "**`/pending`** View pending melange payments\n"
                                    "**`/pay [user] [amount]`** Process user payment (full or partial)\n"
@@ -37,6 +38,7 @@ async def help(interaction, use_followup: bool = True):
 
         "💡 Examples": "• `/sand 250` → 5 melange\n"
                             "• `/split 1000 @user1 @user2` → 500 each\n"
+                            "• `/water Spice Fields` → request water delivery\n"
                             "• `/pay @user` → pay pending melange\n"
                             "• `/payroll` → pay all users"
     }
