@@ -22,6 +22,26 @@ def _parse_role_ids(env_var: str) -> List[int]:
     except ValueError:
         return []
 
+
+def _get_command_permission_level(command_name: str) -> str:
+    """
+    Get the permission level for a command without circular import.
+    This is a simplified version that doesn't depend on the commands package.
+    """
+    # Default permission levels for known commands
+    admin_commands = {'reset', 'pending', 'payroll', 'payment', 'guild_withdraw'}
+    user_commands = {'sand', 'refinery', 'treasury', 'leaderboard', 'ledger', 'expedition', 'split', 'water'}
+    any_commands = {'help'}
+
+    if command_name in admin_commands:
+        return 'admin'
+    elif command_name in user_commands:
+        return 'user'
+    elif command_name in any_commands:
+        return 'any'
+    else:
+        return 'user'  # Default to user level
+
 def get_admin_role_ids() -> List[int]:
     """Get admin role IDs from environment variable"""
     return _parse_role_ids(os.getenv('ADMIN_ROLE_IDS', ''))
@@ -125,12 +145,10 @@ def require_permission_from_metadata():
             # Get the command name from the function name
             command_name = func.__name__
 
-            # Import here to avoid circular imports
-            from commands import get_command_permission_level
             from utils.helpers import send_response
 
-            # Get permission level from metadata
-            permission_level = get_command_permission_level(command_name)
+            # Get permission level from metadata (avoiding circular import)
+            permission_level = _get_command_permission_level(command_name)
 
             # Check permission before executing command
             if not check_permission(interaction, permission_level):

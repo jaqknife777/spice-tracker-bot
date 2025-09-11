@@ -148,12 +148,17 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
                 try:
                     user = await interaction.guild.fetch_member(int(user_id))
                     display_name = user.display_name
-                except:
+                except (discord.NotFound, discord.HTTPException) as e:
+                    logger.debug(f"User {user_id} not found in guild, trying client fetch: {e}")
                     try:
                         user = await interaction.client.fetch_user(int(user_id))
                         display_name = user.display_name
-                    except:
+                    except (discord.NotFound, discord.HTTPException) as e:
+                        logger.warning(f"User {user_id} not found via client fetch: {e}")
                         display_name = f"User_{user_id}"
+            except ValueError as e:
+                logger.error(f"Invalid user ID format: {user_id}, error: {e}")
+                display_name = f"User_{user_id}"
 
                 # Ensure user exists in database
                 await validate_user_exists(get_database(), user_id, display_name)
