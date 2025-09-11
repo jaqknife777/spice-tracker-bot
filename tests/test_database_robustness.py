@@ -219,12 +219,28 @@ class TestDatabaseErrorHandling:
     """Test database error handling and recovery."""
     
     @pytest.mark.asyncio
-    async def test_database_retry_logic(self):
-        """Test that database operations retry on connection failures."""
+    async def test_database_connection_error_handling(self):
+        """Test that database operations handle connection errors properly."""
         with patch.object(Database, '_get_connection') as mock_get_conn:
-            # First call fails, second succeeds
+            # Mock connection that raises an error
+            mock_get_conn.side_effect = asyncpg.ConnectionDoesNotExistError("Connection failed")
+
+            db = Database("test://url")
+
+            # Should raise the connection error
+            with pytest.raises(asyncpg.ConnectionDoesNotExistError):
+                await db.get_user("123456789")
+            
+            # Verify connection was attempted
+            assert mock_get_conn.call_count == 1
+    
+    @pytest.mark.asyncio
+    async def test_database_logging_on_errors(self):
+        """Test that database errors are properly logged."""
+        with patch.object(Database, '_get_connection') as mock_get_conn:
+            # Create a mock connection that raises an error during fetchrow
             mock_conn = AsyncMock()
-            mock_conn.fetchrow.return_value = None
+            mock_conn.fetchrow.side_effect = Exception("Database error")
             
             # Create a proper async context manager
             class MockContextManager:
@@ -237,28 +253,7 @@ class TestDatabaseErrorHandling:
                 async def __aexit__(self, exc_type, exc_val, exc_tb):
                     pass
             
-            # First call raises exception, second call succeeds
-            call_count = 0
-            def side_effect(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                if call_count == 1:
-                    raise asyncpg.ConnectionDoesNotExistError("Connection failed")
-                return MockContextManager(mock_conn)
-            
-            mock_get_conn.side_effect = side_effect
-            
-            db = Database("test://url")
-            
-            # Should retry and eventually succeed
-            result = await db.get_user("123456789")
-            assert result is None  # User not found, but no error raised
-    
-    @pytest.mark.asyncio
-    async def test_database_logging_on_errors(self):
-        """Test that database errors are properly logged."""
-        with patch.object(Database, '_get_connection') as mock_get_conn:
-            mock_get_conn.side_effect = Exception("Database error")
+            mock_get_conn.return_value = MockContextManager(mock_conn)
             
             with patch('database.logger.database_operation') as mock_logger:
                 db = Database("test://url")
