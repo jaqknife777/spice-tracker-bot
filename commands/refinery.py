@@ -6,20 +6,21 @@ import time
 from utils.database_utils import validate_user_exists
 from utils.embed_utils import build_info_embed, build_status_embed
 from utils.command_utils import log_command_metrics
-from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, send_response
+from utils.base_command import command
+from utils.logger import logger
 
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],  # ['status'] - removed for simplicity
-    'description': "View your melange production and payment status"
+    'description': "View your melange production and payment status",
+    'permission_level': 'user'
 }
 
 
-@handle_interaction_expiration
-async def refinery(interaction, use_followup: bool = True):
+@command('refinery')
+async def refinery(interaction, command_start, use_followup: bool = True):
     """Show your melange production statistics"""
-    command_start = time.time()
 
     # Get user data directly from database
     user = await validate_user_exists(get_database(), str(interaction.user.id), interaction.user.display_name, create_if_missing=False)

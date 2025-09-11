@@ -5,27 +5,27 @@ Water delivery request command for guild members.
 import time
 from utils.embed_utils import build_info_embed, build_status_embed
 from utils.command_utils import log_command_metrics
-from utils.decorators import handle_interaction_expiration
+from utils.base_command import command
 from utils.helpers import send_response
 from utils.logger import logger
 
 # Command metadata
 COMMAND_METADATA = {
     'aliases': ['delivery', 'water_delivery'],
-    'description': "Request a water delivery to a specific location"
+    'description': "Request a water delivery to a specific location",
+    'permission_level': 'user'
 }
 
 
-@handle_interaction_expiration
-async def water(interaction, destination: str = "DD base", use_followup: bool = True):
+@command('water')
+async def water(interaction, command_start, destination: str = "DD base", use_followup: bool = True):
     """Request a water delivery to a specific location"""
-    command_start = time.time()
 
     # Validate destination (basic sanitization)
     destination = destination.strip()
     if len(destination) > 100:
         destination = destination[:100] + "..."
-    
+
     if not destination:
         destination = "DD base"
 

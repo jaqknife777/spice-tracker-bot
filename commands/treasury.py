@@ -6,44 +6,45 @@ Treasury command for viewing guild's accumulated resources.
 COMMAND_METADATA = {
     'aliases': [],  # ['guild_treasury'] - renamed for simplicity
     'description': "View guild treasury balance and statistics",
-    'params': {}
+    'params': {},
+    'permission_level': 'user'
 }
 
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
-from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, get_sand_per_melange, send_response
+from utils.base_command import command
+from utils.logger import logger
 
 
-@handle_interaction_expiration
-async def treasury(interaction, use_followup: bool = True):
+@command('treasury')
+async def treasury(interaction, command_start, use_followup: bool = True):
     """View guild treasury balance and statistics"""
-    command_start = time.time()
-    
+
     try:
         # Get guild treasury data
         treasury_data, get_treasury_time = await timed_database_operation(
             "get_guild_treasury",
             get_database().get_guild_treasury
         )
-        
+
         # Get treasury melange (primary currency)
         total_melange = treasury_data.get('total_melange', 0)
-        
+
         # Format timestamps
         created_at = treasury_data.get('created_at')
         last_updated = treasury_data.get('last_updated')
-        
+
         created_str = created_at.strftime('%Y-%m-%d %H:%M UTC') if created_at else 'Unknown'
         updated_str = last_updated.strftime('%Y-%m-%d %H:%M UTC') if last_updated else 'Never'
-        
+
         fields = {
             "💎 Melange": f"**{total_melange:,}** available",
             "📊 Updated": updated_str
         }
-        
+
         # Determine color based on melange (primary currency)
         if total_melange >= 200:
             color = 0xFFD700  # Gold - very wealthy
@@ -53,7 +54,7 @@ async def treasury(interaction, use_followup: bool = True):
             color = 0xFFA500  # Orange - moderate
         else:
             color = 0xFF4500  # Red - low funds
-        
+
         embed = build_status_embed(
             title="🏛️ Treasury",
             description=f"💎 **{total_melange:,} melange** in treasury",
@@ -61,12 +62,12 @@ async def treasury(interaction, use_followup: bool = True):
             fields=fields,
             timestamp=interaction.created_at
         )
-        
+
         # Send response
         response_start = time.time()
         await send_response(interaction, embed=embed.build(), use_followup=use_followup)
         response_time = time.time() - response_start
-        
+
         # Log metrics
         total_time = time.time() - command_start
         log_command_metrics(
@@ -78,11 +79,11 @@ async def treasury(interaction, use_followup: bool = True):
             response_time=f"{response_time:.3f}s",
             total_melange=total_melange
         )
-        
+
     except Exception as error:
         total_time = time.time() - command_start
         from utils.logger import logger
-        logger.error(f"Error in treasury command: {error}", 
+        logger.error(f"Error in treasury command: {error}",
                     user_id=str(interaction.user.id),
                     username=interaction.user.display_name,
                     total_time=f"{total_time:.3f}s")

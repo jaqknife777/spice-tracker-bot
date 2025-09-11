@@ -5,36 +5,30 @@ Pending command for viewing all users with pending melange payments (Admin only)
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],  # ['melange_owed', 'owed'] - removed for simplicity
-    'description': "View all users with pending melange payments (Admin only)"
+    'description': "View all users with pending melange payments (Admin only)",
+    'permission_level': 'admin'
 }
 
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
-from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, send_response
-from utils.permissions import is_admin
+from utils.base_command import admin_command
 from utils.logger import logger
 
 
-@handle_interaction_expiration
-async def pending(interaction, use_followup: bool = True):
+@admin_command('pending')
+async def pending(interaction, command_start, use_followup: bool = True):
     """View all users with pending melange payments (Admin only)"""
-    command_start = time.time()
-    
-    # Check if user has admin permissions
-    if not is_admin(interaction):
-        await send_response(interaction, "❌ You need an admin role to use this command. Contact a server administrator.", use_followup=use_followup, ephemeral=True)
-        return
-    
+
     try:
         # Get all users with pending melange using utility function
         users_with_pending, get_pending_time = await timed_database_operation(
             "get_all_users_with_pending_melange",
             get_database().get_all_users_with_pending_melange
         )
-        
+
         if not users_with_pending:
             embed = build_status_embed(
                 title="📋 Pending Melange Payments",
@@ -44,20 +38,20 @@ async def pending(interaction, use_followup: bool = True):
             )
             await send_response(interaction, embed=embed.build(), use_followup=use_followup)
             return
-        
+
         # Calculate totals - focus only on melange
         total_melange_owed = sum(user['pending_melange'] for user in users_with_pending)
         total_users = len(users_with_pending)
-        
+
         # Build user list with melange information only
         user_list = []
         for user_data in users_with_pending:
             username = user_data['username']
             pending_melange = user_data['pending_melange']
-            
+
             # Format user entry - only show pending melange
             user_list.append(f"• **{username}**: **{pending_melange:,}** melange")
-        
+
         # Limit display to prevent embed overflow
         max_users_shown = 20
         if len(user_list) > max_users_shown:
@@ -65,11 +59,11 @@ async def pending(interaction, use_followup: bool = True):
             remaining_count = len(user_list) - max_users_shown
             shown_users.append(f"... and {remaining_count} more user{'s' if remaining_count != 1 else ''}")
             user_list = shown_users
-        
+
         fields = {
             "👥 Pending Users": "\n".join(user_list) if user_list else "No pending payments"
         }
-        
+
         # Color based on amount owed
         if total_melange_owed >= 100:
             color = 0xFF4500  # Red - high amount owed
@@ -79,7 +73,7 @@ async def pending(interaction, use_followup: bool = True):
             color = 0xFFD700  # Gold - low amount
         else:
             color = 0x00FF00  # Green - very low amount
-        
+
         embed = build_status_embed(
             title="📋 Pending Payments",
             description=f"💰 **{total_melange_owed:,} melange** owed to **{total_users}** users",
@@ -87,12 +81,12 @@ async def pending(interaction, use_followup: bool = True):
             fields=fields,
             timestamp=interaction.created_at
         )
-        
+
         # Send response
         response_start = time.time()
         await send_response(interaction, embed=embed.build(), use_followup=use_followup)
         response_time = time.time() - response_start
-        
+
         # Log metrics
         total_time = time.time() - command_start
         log_command_metrics(
@@ -107,14 +101,14 @@ async def pending(interaction, use_followup: bool = True):
             users_with_pending=total_users,
             total_melange_owed=total_melange_owed
         )
-        
+
         # Log the admin request for audit
-        logger.info(f"Pending melange report requested by admin {interaction.user.display_name} ({interaction.user.id})", 
+        logger.info(f"Pending melange report requested by admin {interaction.user.display_name} ({interaction.user.id})",
                    users_pending=total_users, total_melange_owed=total_melange_owed)
-        
+
     except Exception as error:
         total_time = time.time() - command_start
-        logger.error(f"Error in pending command: {error}", 
+        logger.error(f"Error in pending command: {error}",
                     user_id=str(interaction.user.id),
                     username=interaction.user.display_name,
                     total_time=f"{total_time:.3f}s")

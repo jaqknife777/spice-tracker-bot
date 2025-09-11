@@ -9,40 +9,34 @@ COMMAND_METADATA = {
     'params': {
         'user': "User to pay",
         'amount': "Amount of melange to pay (optional, defaults to full pending amount)"
-    }
+    },
+    'permission_level': 'admin'
 }
 
 import time
 from utils.database_utils import timed_database_operation
 from utils.embed_utils import build_status_embed
 from utils.command_utils import log_command_metrics
-from utils.decorators import handle_interaction_expiration
 from utils.helpers import get_database, send_response
-from utils.permissions import is_admin
+from utils.base_command import admin_command
 from utils.logger import logger
 
 
-@handle_interaction_expiration
-async def pay(interaction, user, amount: int = None, use_followup: bool = True):
+@admin_command('pay')
+async def pay(interaction, command_start, user, amount: int = None, use_followup: bool = True):
     """Process melange payment for a user (Admin only)"""
-    command_start = time.time()
-    
-    # Check if user has admin permissions
-    if not is_admin(interaction):
-        await send_response(interaction, "❌ You need an admin role to use this command. Contact a server administrator.", use_followup=use_followup, ephemeral=True)
-        return
-    
+
     # Get user's pending melange
     pending_data, get_pending_time = await timed_database_operation(
         "get_user_pending_melange",
         get_database().get_user_pending_melange,
         str(user.id)
     )
-    
+
     pending_melange = pending_data.get('pending_melange', 0)
     total_melange = pending_data.get('total_melange', 0)
     paid_melange = pending_data.get('paid_melange', 0)
-    
+
     if pending_melange <= 0:
         embed = build_status_embed(
             title="💰 No Payment Due",
@@ -53,7 +47,7 @@ async def pay(interaction, user, amount: int = None, use_followup: bool = True):
         )
         await send_response(interaction, embed=embed.build(), use_followup=use_followup)
         return
-    
+
     # Determine payment amount
     if amount is None:
         # Pay in full
@@ -67,7 +61,7 @@ async def pay(interaction, user, amount: int = None, use_followup: bool = True):
             await send_response(interaction, f"❌ Payment amount ({amount:,}) exceeds pending melange ({pending_melange:,}).", use_followup=use_followup, ephemeral=True)
             return
         payment_amount = amount
-    
+
     # Process the payment
     paid_amount, pay_melange_time = await timed_database_operation(
         "pay_user_melange",
@@ -75,16 +69,16 @@ async def pay(interaction, user, amount: int = None, use_followup: bool = True):
         str(user.id), user.display_name, payment_amount,
         str(interaction.user.id), interaction.user.display_name
     )
-    
+
     # Calculate remaining pending after payment
     remaining_pending = pending_melange - paid_amount
-    
+
     # Build concise response
     fields = {
         "💰 Payment": f"**{paid_amount:,}** melange | **Admin:** {interaction.user.display_name}",
         "📊 Status": f"**Total:** {total_melange:,} | **Paid:** {paid_melange + paid_amount:,} | **Pending:** {remaining_pending:,}"
     }
-    
+
     payment_type = "Full payment" if amount is None else "Partial payment"
     embed = build_status_embed(
         title=f"💰 {payment_type} Processed",
@@ -93,12 +87,12 @@ async def pay(interaction, user, amount: int = None, use_followup: bool = True):
         fields=fields,
         timestamp=interaction.created_at
     )
-    
+
     # Send response using helper function
     response_start = time.time()
     await send_response(interaction, embed=embed.build(), use_followup=use_followup)
     response_time = time.time() - response_start
-    
+
     # Log performance metrics using utility function
     total_time = time.time() - command_start
     log_command_metrics(
@@ -116,8 +110,8 @@ async def pay(interaction, user, amount: int = None, use_followup: bool = True):
         melange_paid=paid_amount,
         total_melange=total_melange
     )
-    
+
     logger.info(f'User {user.display_name} ({user.id}) paid {paid_amount:,} melange by {interaction.user.display_name} ({interaction.user.id})',
-                user_id=str(user.id), username=user.display_name, 
+                user_id=str(user.id), username=user.display_name,
                 admin_id=str(interaction.user.id), admin_username=interaction.user.display_name,
                 melange_paid=paid_amount)

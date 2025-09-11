@@ -4,7 +4,8 @@ Permission utilities for the Spice Tracker Bot.
 
 import os
 import discord
-from typing import List
+from typing import List, Callable, Any
+from functools import wraps
 
 def _parse_role_ids(env_var: str) -> List[int]:
     """Parse comma-separated role IDs from environment variable"""
@@ -86,3 +87,121 @@ def is_officer(interaction: discord.Interaction) -> bool:
         return any(role_id in user_role_ids for role_id in officer_role_ids)
 
     return False
+
+def check_permission(interaction: discord.Interaction, permission_level: str) -> bool:
+    """
+    Check if user has the required permission level.
+
+    Args:
+        interaction: Discord interaction object
+        permission_level: Required permission level ('admin', 'officer', 'user', 'any')
+
+    Returns:
+        True if user has required permission, False otherwise
+    """
+    if permission_level == 'admin':
+        return is_admin(interaction)
+    elif permission_level == 'officer':
+        return is_officer(interaction)
+    elif permission_level == 'user':
+        return is_allowed_user(interaction)
+    elif permission_level == 'any':
+        return True
+    else:
+        # Unknown permission level, deny access
+        return False
+
+def require_permission_from_metadata():
+    """
+    Decorator that automatically reads permission level from command metadata.
+    This eliminates duplication between decorator and metadata.
+
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(interaction: discord.Interaction, *args, **kwargs) -> Any:
+            # Get the command name from the function name
+            command_name = func.__name__
+
+            # Import here to avoid circular imports
+            from commands import get_command_permission_level
+            from utils.helpers import send_response
+
+            # Get permission level from metadata
+            permission_level = get_command_permission_level(command_name)
+
+            # Check permission before executing command
+            if not check_permission(interaction, permission_level):
+                message = get_permission_denied_message(permission_level)
+                await send_response(interaction, message, use_followup=kwargs.get('use_followup', True), ephemeral=True)
+                return
+
+            # Execute the original function
+            return await func(interaction, *args, **kwargs)
+
+        return wrapper
+    return decorator
+
+def require_permission(permission_level: str):
+    """
+    Legacy decorator to require specific permission level for command execution.
+    DEPRECATED: Use require_permission_from_metadata() instead.
+
+    Args:
+        permission_level: Required permission level ('admin', 'officer', 'user', 'any')
+
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(interaction: discord.Interaction, *args, **kwargs) -> Any:
+            # Check permission before executing command
+            if not check_permission(interaction, permission_level):
+                # Import here to avoid circular imports
+                from utils.helpers import send_response
+
+                message = get_permission_denied_message(permission_level)
+                await send_response(interaction, message, use_followup=kwargs.get('use_followup', True), ephemeral=True)
+                return
+
+            # Execute the original function
+            return await func(interaction, *args, **kwargs)
+
+        return wrapper
+    return decorator
+
+def validate_command_permission(interaction: discord.Interaction, command_metadata: dict) -> bool:
+    """
+    Validate if user has permission to execute a command based on its metadata.
+
+    Args:
+        interaction: Discord interaction object
+        command_metadata: Command metadata dictionary containing permission_level
+
+    Returns:
+        True if user has permission, False otherwise
+    """
+    permission_level = command_metadata.get('permission_level', 'user')  # Default to 'user' if not specified
+    return check_permission(interaction, permission_level)
+
+def get_permission_denied_message(permission_level: str) -> str:
+    """
+    Get the appropriate permission denied message for a permission level.
+
+    Args:
+        permission_level: The permission level that was required
+
+    Returns:
+        Appropriate error message
+    """
+    permission_messages = {
+        'admin': "❌ You need an admin role to use this command. Contact a server administrator.",
+        'officer': "❌ You need an officer role to use this command. Contact a server administrator.",
+        'user': "❌ You don't have permission to use this command.",
+        'any': "❌ You don't have permission to use this command."
+    }
+
+    return permission_messages.get(permission_level, "❌ You don't have permission to use this command.")

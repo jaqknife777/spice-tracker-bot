@@ -5,19 +5,20 @@ Help command for showing all available spice tracking commands.
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],  # ['commands'] - removed for simplicity
-    'description': "Show all available spice tracking commands"
+    'description': "Show all available spice tracking commands",
+    'permission_level': 'any'
 }
 
 import os
 from utils.embed_utils import build_status_embed
-from utils.decorators import handle_interaction_expiration
+from utils.base_command import command
 from utils.helpers import send_response
 
 
-@handle_interaction_expiration
-async def help(interaction, use_followup: bool = True):
+@command('help')
+async def help(interaction, command_start, use_followup: bool = True):
     """Show all available commands and their descriptions"""
-    
+
     # Use utility function for embed building
     fields = {
         "📊 Harvester Commands": "**`/sand [amount]`** Convert sand→melange (1-10k, 50:1 ratio)\n"
@@ -42,7 +43,7 @@ async def help(interaction, use_followup: bool = True):
                             "• `/pay @user` → pay pending melange\n"
                             "• `/payroll` → pay all users"
     }
-    
+
     embed = build_status_embed(
         title="🏜️ Spice Refinery Commands",
         description="Sand→melange conversion & production tracking",
@@ -50,5 +51,5 @@ async def help(interaction, use_followup: bool = True):
         fields=fields,
         timestamp=interaction.created_at
     )
-    
+
     await send_response(interaction, embed=embed.build(), use_followup=use_followup, ephemeral=True)
