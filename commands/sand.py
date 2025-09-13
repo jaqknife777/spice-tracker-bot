@@ -57,12 +57,11 @@ async def sand(interaction, command_start, amount: int, use_followup: bool = Tru
         )
 
     # Build concise response
-    leftover_sand = amount % sand_per_melange
     description = f"🎉 **+{new_melange:,} melange**" if new_melange > 0 else f"📦 **{amount:,} sand processed**"
 
     fields = {
         "💎 Total": f"{(current_melange + new_melange):,} melange",
-        "⚙️ Converted": f"{amount:,} sand → {new_melange:,} melange" + (f" ({leftover_sand} unused)" if leftover_sand > 0 else "")
+        "⚙️ Converted": f"{amount:,} sand → {new_melange:,} melange"
     }
 
     embed = build_status_embed(

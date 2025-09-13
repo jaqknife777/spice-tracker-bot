@@ -119,7 +119,7 @@ CREATE INDEX idx_melange_payments_created_at ON melange_payments (created_at);
 INSERT INTO settings (key, value) VALUES ('sand_per_melange', '50');
 
 -- Initial guild treasury record
-INSERT INTO guild_treasury (total_sand, total_melange) 
+INSERT INTO guild_treasury (total_sand, total_melange)
 VALUES (0, 0);
 
 -- Useful views for common queries
@@ -128,7 +128,7 @@ VALUES (0, 0);
 
 -- Leaderboard view
 CREATE VIEW leaderboard AS
-SELECT 
+SELECT
     u.user_id,
     u.username,
     u.total_melange,
@@ -144,7 +144,7 @@ ORDER BY u.total_melange DESC, pending_melange DESC;
 
 -- Expedition summary view
 CREATE VIEW expedition_summary AS
-SELECT 
+SELECT
     e.id,
     e.initiator_username,
     e.total_sand,
