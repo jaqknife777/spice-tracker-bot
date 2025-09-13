@@ -29,13 +29,14 @@ async def help(interaction, command_start, use_followup: bool = True):
                                  "**`/split [sand] [@users]`** Split sand→melange with guild cut\n"
                                  "**`/water [destination]`** Request water delivery\n"
                                  "**`/help`** Show all commands",
-        "⚙️ Admin Commands": "**`/pending`** View pending melange payments\n"
+        "⚙️ Admin Commands": "**`/sync`** Sync commands (Owner)\n"
+                                   "**`/reset confirm:True`** Reset all data",
+        "🏛️ Officer Commands": "**`/pending`** View pending melange payments\n"
                                    "**`/pay [user] [amount]`** Process user payment (full or partial)\n"
                                    "**`/payroll`** Pay all users\n"
                                    "**`/treasury`** View guild treasury\n"
                                    "**`/guild_withdraw [user] [amount]`** Treasury withdrawal\n"
-                                   "**`/sync`** Sync commands (Owner)\n"
-                                   "**`/reset confirm:True`** Reset all data",
+                                   "**`/landsraad [action]`** Manage conversion bonus (37.5:1 rate)",
 
         "💡 Examples": "• `/sand 250` → 5 melange\n"
                             "• `/split 1000 @user1 @user2` → 500 each\n"

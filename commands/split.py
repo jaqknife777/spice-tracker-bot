@@ -18,7 +18,7 @@ import re
 import traceback
 import discord
 from utils.base_command import command
-from utils.helpers import get_database, get_sand_per_melange, send_response
+from utils.helpers import get_database, convert_sand_to_melange, send_response
 from utils.logger import logger
 
 
@@ -74,12 +74,12 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
             await send_response(interaction, f"❌ Total user percentages ({total_percentage}%) cannot exceed 100%.", use_followup=use_followup, ephemeral=True)
             return
 
-        # Get conversion rate first
-        sand_per_melange = get_sand_per_melange()
+        # Convert total sand to melange using utility method (handles landsraad bonus)
+        total_melange, remaining_sand = await convert_sand_to_melange(total_sand)
 
-        # Convert total sand to melange first
-        total_melange = total_sand // sand_per_melange
-        remaining_sand = total_sand % sand_per_melange  # This will go to guild as sand
+        # Get conversion rate for expedition record and calculations
+        from utils.helpers import get_sand_per_melange_with_bonus
+        conversion_rate = await get_sand_per_melange_with_bonus()
 
         # Calculate user melange distributions
         user_distributions = []
@@ -129,7 +129,7 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
             str(interaction.user.id),
             interaction.user.display_name,
             total_sand,
-            sand_per_melange=sand_per_melange,
+            sand_per_melange=int(conversion_rate),
             guild_cut_percentage=actual_guild_percentage
         )
 
@@ -166,7 +166,7 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
             await validate_user_exists(get_database(), user_id, display_name)
 
             # Calculate equivalent sand for this user's melange (for deposit tracking)
-            user_sand = user_melange * sand_per_melange
+            user_sand = int(user_melange * conversion_rate)
 
             # Add expedition participant
             await get_database().add_expedition_participant(

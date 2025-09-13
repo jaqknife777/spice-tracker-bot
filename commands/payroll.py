@@ -5,8 +5,8 @@ Payroll command for processing payments for all unpaid harvesters (Admin only).
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],  # ['payall'] - removed for simplicity
-    'description': "Process payments for all unpaid harvesters (Admin only)",
-    'permission_level': 'admin'
+    'description': "Process payments for all unpaid harvesters (Admin/Officer only)",
+    'permission_level': 'admin_or_officer'
 }
 
 import time

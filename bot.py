@@ -124,7 +124,7 @@ async def on_ready():
 # Register commands with the bot's command tree
 def register_commands():
     """Register all commands explicitly with their exact signatures"""
-    from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, payment, payroll, treasury, guild_withdraw, pending, water
+    from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, payment, payroll, treasury, guild_withdraw, pending, water, landsraad
 
     # Sand command (formerly harvest)
     @bot.tree.command(name="sand", description="Convert spice sand into melange (50:1 ratio)")
@@ -215,6 +215,15 @@ def register_commands():
     @app_commands.describe(destination="Destination for water delivery (default: DD base)")
     async def water_cmd(interaction: discord.Interaction, destination: str = "DD base"):  # noqa: F841
         await water(interaction, destination)
+
+    # Landsraad command
+    @bot.tree.command(name="landsraad", description="Manage the landsraad bonus for melange conversion")
+    @app_commands.describe(
+        action="Action to perform: 'status', 'enable', 'disable'",
+        confirm="Confirmation required for enable/disable actions"
+    )
+    async def landsraad_cmd(interaction: discord.Interaction, action: str, confirm: bool = False):  # noqa: F841
+        await landsraad(interaction, action, confirm)
 
     # Sync command (slash command version)
     @bot.tree.command(name="sync", description="Sync slash commands (Bot Owner Only)")

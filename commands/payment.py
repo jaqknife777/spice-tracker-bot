@@ -5,12 +5,12 @@ Pay command for processing melange payments (Admin only).
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],  # formerly 'payment'
-    'description': "Process melange payment for a user (Admin only)",
+    'description': "Process melange payment for a user (Admin/Officer only)",
     'params': {
         'user': "User to pay",
         'amount': "Amount of melange to pay (optional, defaults to full pending amount)"
     },
-    'permission_level': 'admin'
+    'permission_level': 'admin_or_officer'
 }
 
 import time

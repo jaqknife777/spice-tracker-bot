@@ -4,12 +4,13 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
 
 ## ✨ Features
 
-- **🏜️ Sand Conversion** - Convert spice sand into melange (primary currency) at 50:1 ratio
+- **🏜️ Sand Conversion** - Convert spice sand into melange (primary currency) at 50:1 ratio (or 37.5:1 with landsraad bonus)
 - **⚗️ Refinery System** - View melange production, pending payments, and payment statistics
 - **🚀 Team Expeditions** - Split spice among team members with customizable guild cuts
 - **🏛️ Guild Treasury** - Automatic guild cuts from expeditions with withdrawal controls
 - **📊 Leaderboards** - Guild rankings by melange production
 - **💰 Payment System** - Track pending melange and process payments to users
+- **🏛️ Landsraad Bonus** - Global conversion rate bonus (37.5 sand = 1 melange when active)
 - **🔧 Admin Controls** - Treasury management, payroll processing, and data resets
 
 ## 🚀 Quick Setup
@@ -67,12 +68,18 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
   - **Creates:** Expedition records and tracks melange owed for payout
 
 ### 🏛️ Guild Admin Commands
+- **`/reset confirm:True`** - Reset all refinery statistics (requires confirmation)
+
+### 🏛️ Officer Commands
 - **`/pending`** - View all users with pending melange payments and amounts owed
 - **`/payment <user>`** - Process payment for a specific harvester's deposits
 - **`/payroll`** - Process payments for all unpaid harvesters at once
 - **`/treasury`** - View guild treasury balance and melange reserves
 - **`/guild_withdraw <user> <amount>`** - Withdraw resources from guild treasury to give to a user
-- **`/reset confirm:True`** - Reset all refinery statistics (requires confirmation)
+- **`/landsraad <action> [confirm]`** - Manage landsraad bonus (status/enable/disable)
+  - **Status:** Check current conversion rate (50:1 or 37.5:1)
+  - **Enable:** Activate landsraad bonus (37.5 sand = 1 melange)
+  - **Disable:** Return to normal rate (50 sand = 1 melange)
 
 ### 🔧 Bot Owner Commands
 - **`/sync`** - Sync slash commands (Bot Owner Only)
@@ -82,6 +89,7 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
 ### Individual Harvests
 ```
 /sand 2500  →  50 melange produced (50:1 conversion rate)
+/sand 2500  →  66 melange produced (37.5:1 with landsraad bonus)
 ```
 
 ### Team Expeditions

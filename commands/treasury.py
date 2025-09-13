@@ -7,7 +7,7 @@ COMMAND_METADATA = {
     'aliases': [],  # ['guild_treasury'] - renamed for simplicity
     'description': "View guild treasury balance and statistics",
     'params': {},
-    'permission_level': 'user'
+    'permission_level': 'admin_or_officer'
 }
 
 import time

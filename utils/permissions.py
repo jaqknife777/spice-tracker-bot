@@ -114,7 +114,7 @@ def check_permission(interaction: discord.Interaction, permission_level: str) ->
 
     Args:
         interaction: Discord interaction object
-        permission_level: Required permission level ('admin', 'officer', 'user', 'any')
+        permission_level: Required permission level ('admin', 'officer', 'admin_or_officer', 'user', 'any')
 
     Returns:
         True if user has required permission, False otherwise
@@ -123,6 +123,8 @@ def check_permission(interaction: discord.Interaction, permission_level: str) ->
         return is_admin(interaction)
     elif permission_level == 'officer':
         return is_officer(interaction)
+    elif permission_level == 'admin_or_officer':
+        return is_admin(interaction) or is_officer(interaction)
     elif permission_level == 'user':
         return is_allowed_user(interaction)
     elif permission_level == 'any':
@@ -218,6 +220,7 @@ def get_permission_denied_message(permission_level: str) -> str:
     permission_messages = {
         'admin': "❌ You need an admin role to use this command. Contact a server administrator.",
         'officer': "❌ You need an officer role to use this command. Contact a server administrator.",
+        'admin_or_officer': "❌ You need an admin or officer role to use this command. Contact a server administrator.",
         'user': "❌ You don't have permission to use this command.",
         'any': "❌ You don't have permission to use this command."
     }

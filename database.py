@@ -783,3 +783,44 @@ class Database:
                 await self._log_operation("select_join", "deposits_users", start_time, success=False,
                                         error=str(e))
                 raise e
+
+    async def get_landsraad_bonus_status(self) -> bool:
+        """Get the current landsraad bonus status"""
+        start_time = time.time()
+        try:
+            async with self._get_connection() as conn:
+                result = await conn.fetchval(
+                    "SELECT setting_value FROM global_settings WHERE setting_key = 'landsraad_bonus_active'"
+                )
+
+                await self._log_operation("select", "global_settings", start_time, success=True,
+                                        result_count=1)
+                return result and result.lower() == 'true'
+        except Exception as e:
+            await self._log_operation("select", "global_settings", start_time, success=False,
+                                    error=str(e))
+            # Default to False if there's an error
+            return False
+
+    async def set_landsraad_bonus_status(self, active: bool) -> bool:
+        """Set the landsraad bonus status"""
+        start_time = time.time()
+        try:
+            async with self._get_connection() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO global_settings (setting_key, setting_value, description)
+                    VALUES ('landsraad_bonus_active', $1, 'Whether the landsraad bonus is active (37.5 sand = 1 melange instead of 50)')
+                    ON CONFLICT (setting_key)
+                    DO UPDATE SET setting_value = $1, last_updated = CURRENT_TIMESTAMP
+                    """,
+                    str(active).lower()
+                )
+
+                await self._log_operation("upsert", "global_settings", start_time, success=True,
+                                        result_count=1)
+                return True
+        except Exception as e:
+            await self._log_operation("upsert", "global_settings", start_time, success=False,
+                                    error=str(e))
+            raise e

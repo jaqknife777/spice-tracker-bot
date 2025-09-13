@@ -5,8 +5,8 @@ Pending command for viewing all users with pending melange payments (Admin only)
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],  # ['melange_owed', 'owed'] - removed for simplicity
-    'description': "View all users with pending melange payments (Admin only)",
-    'permission_level': 'admin'
+    'description': "View all users with pending melange payments (Admin/Officer only)",
+    'permission_level': 'admin_or_officer'
 }
 
 import time
