@@ -3,29 +3,33 @@
 
 # Force LF line endings for all text files
 *.py text eol=lf
+*.py.mako text eol=lf
 *.md text eol=lf
 *.txt text eol=lf
-*.json text eol=lf
-*.toml text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
 *.sql text eol=lf
 *.sh text eol=lf
 *.ps1 text eol=lf
-*.dockerfile text eol=lf
-*.gitignore text eol=lf
-*.gitattributes text eol=lf
+*.bat text eol=lf
+*.cmd text eol=lf
 
-# Force CRLF for Windows batch files
+# Force CRLF for Windows-specific files
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
 # Binary files
 *.db binary
-*.lock binary
+*.db-journal binary
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
 *.pdf binary
+*.zip binary
+*.tar.gz binary

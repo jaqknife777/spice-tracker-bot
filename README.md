@@ -12,6 +12,8 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
 - **💰 Payment System** - Track pending melange and process payments to users
 - **🏛️ Landsraad Bonus** - Global conversion rate bonus (37.5 sand = 1 melange when active)
 - **🔧 Admin Controls** - Treasury management, payroll processing, and data resets
+- **🗄️ Database Migrations** - Automated schema management with Alembic
+- **🔧 Modern Architecture** - SQLAlchemy ORM with async support and production-ready migrations
 
 ## 🚀 Quick Setup
 
@@ -19,6 +21,7 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
 - Python 3.11+
 - Discord Bot Token
 - Supabase Account (PostgreSQL database)
+- Git (for version control)
 
 ### Local Development
 
@@ -30,6 +33,7 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
    ```
 
 2. **Environment variables**
+   Create a `.env` file with:
    ```env
    DISCORD_TOKEN=your_bot_token
    DATABASE_URL=your_supabase_connection_string
@@ -37,18 +41,67 @@ A Discord bot for **Dune: Awakening** guilds to convert spice sand to melange, m
    AUTO_SYNC_COMMANDS=true
    ```
 
-3. **Run**
+3. **Database setup**
+   ```bash
+   # Apply database migrations
+   python migrate.py apply
+   ```
+
+4. **Run the bot**
    ```bash
    python bot.py
    ```
 
-## 🗄️ Database Setup
+## 🗄️ Database Management
+
+### Architecture
+This project uses **SQLAlchemy ORM** with **Alembic migrations** for modern database management:
+
+- **Development**: SQLite database for local testing
+- **Production**: PostgreSQL (Supabase) with full migration support
+- **Schema Management**: ORM models define structure, migrations handle changes
+- **Version Control**: All database changes are tracked and reversible
+
+### Migration Commands
+```bash
+# Check current migration status
+python migrate.py status
+
+# Apply all pending migrations
+python migrate.py apply
+
+# Generate new migration from model changes
+python migrate.py generate "Add user email field"
+
+# Show migration history
+python migrate.py history
+
+# Rollback last migration
+python migrate.py rollback
+
+# Stamp current state as baseline (for existing databases)
+python migrate.py stamp
+```
 
 ### Supabase Setup
 1. Create project at [supabase.com](https://supabase.com)
 2. Get your connection string from Project Settings → Database
-3. Run the migration: `supabase/migrations/20241201000000_initial_schema.sql`
-4. Set `DATABASE_URL` environment variable
+3. Add to your `.env` file: `DATABASE_URL=your_supabase_connection_string`
+4. Apply migrations: `python migrate.py apply`
+
+### Quick Reference
+```bash
+# Database migrations
+python migrate.py status     # Check migration status
+python migrate.py apply      # Apply pending migrations
+python migrate.py generate   # Create new migration
+python migrate.py rollback   # Undo last migration
+python migrate.py stamp      # Mark current state as baseline
+
+# Development
+python -m pytest            # Run tests
+python bot.py               # Start the bot
+```
 
 ## 🤖 Commands
 
@@ -160,6 +213,31 @@ The bot includes:
 | `AUTO_SYNC_COMMANDS` | Auto-sync slash commands on startup | ❌ | `true` |
 | `COMMAND_PERMISSION_OVERRIDES` | Override command permissions (format: `cmd:level`) | ❌ | - |
 
+## 🏗️ Technical Architecture
+
+### Database Layer
+- **SQLAlchemy ORM** - Modern async database abstraction
+- **Alembic Migrations** - Version-controlled schema management
+- **PostgreSQL** - Production database (Supabase)
+- **SQLite** - Development and testing database
+
+### Bot Framework
+- **discord.py** - Modern Discord API wrapper with slash commands
+- **Async/Await** - Non-blocking I/O for high performance
+- **Command System** - Modular command architecture with permission controls
+
+### Development Tools
+- **pytest** - Comprehensive test suite with fixtures
+- **python-dotenv** - Environment variable management
+- **Migration Manager** - Custom wrapper for database operations
+- **Type Hints** - Full type safety throughout codebase
+
+### Production Features
+- **Structured Logging** - Production-ready logging with context
+- **Error Handling** - Graceful error recovery and user feedback
+- **Rate Limiting** - Built-in Discord API rate limit handling
+- **Health Checks** - Database connectivity and command validation
+
 ## 🛡️ Permissions
 
 - **👥 Basic Commands:** All guild members can use harvesting and viewing commands
@@ -192,13 +270,64 @@ export COMMAND_PERMISSION_OVERRIDES="reset:officer,sand:any,help:user"
 - **⚡ Async Operations:** Non-blocking Discord interactions and database queries
 - **🛡️ Error Recovery:** Graceful handling of database and Discord API failures
 
-## 🧪 Testing
+## 🧪 Development
 
-Run the comprehensive test suite:
+### Running Tests
 ```bash
 # Run all tests
-python -m pytest tests/ -v
+python -m pytest
 
 # Run with coverage
-python -m pytest tests/ --cov=. --cov-report=html
+python -m pytest --cov=.
+
+# Run specific test file
+python -m pytest tests/test_commands.py
+
+# Run with verbose output
+python -m pytest -v
 ```
+
+### Database Development
+```bash
+# Generate new migration from model changes
+python migrate.py generate "Description of changes"
+
+# Apply migrations to development database
+python migrate.py apply
+
+# Check migration status
+python migrate.py status
+
+# Rollback last migration
+python migrate.py rollback
+```
+
+### Code Quality
+- **Type Hints** - All functions have proper type annotations
+- **Docstrings** - Comprehensive documentation for all public methods
+- **Error Handling** - Graceful error recovery with user feedback
+- **Logging** - Structured logging for debugging and monitoring
+
+### Contributing
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes with tests
+4. Run tests: `python -m pytest`
+5. Commit changes: `git commit -m 'Add amazing feature'`
+6. Push to branch: `git push origin feature/amazing-feature`
+7. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📞 Support
+
+For support, questions, or feature requests:
+- Open an issue on GitHub
+- Join our Discord server
+- Contact the bot owner
+
+---
+
+**Made with ❤️ for the Dune: Awakening community**

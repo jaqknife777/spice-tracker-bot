@@ -1,11 +1,11 @@
 """
-Tests for landsraad bonus functionality.
+Tests for landsraad bonus functionality using real database.
 """
 
 import pytest
 from unittest.mock import AsyncMock, patch
 from utils.helpers import convert_sand_to_melange, get_sand_per_melange_with_bonus
-from database import Database
+from database_orm import Database
 
 
 class TestLandsraadBonus:
@@ -125,7 +125,55 @@ class TestLandsraadBonus:
 
 
 class TestDatabaseLandsraadBonus:
-    """Test database methods for landsraad bonus management."""
+    """Test database methods for landsraad bonus management with real database."""
+
+    @pytest.mark.asyncio
+    async def test_landsraad_bonus_real_database_operations(self, test_database):
+        """Test landsraad bonus operations with real database."""
+        # Test setting landsraad bonus to active
+        result = await test_database.set_landsraad_bonus_status(True)
+        assert result is True
+
+        # Test getting landsraad bonus status when active
+        status = await test_database.get_landsraad_bonus_status()
+        assert status is True
+
+        # Test setting landsraad bonus to inactive
+        result = await test_database.set_landsraad_bonus_status(False)
+        assert result is True
+
+        # Test getting landsraad bonus status when inactive
+        status = await test_database.get_landsraad_bonus_status()
+        assert status is False
+
+    @pytest.mark.asyncio
+    async def test_landsraad_bonus_conversion_rates(self, test_database):
+        """Test that landsraad bonus affects conversion rates correctly."""
+        # Set landsraad bonus to active
+        await test_database.set_landsraad_bonus_status(True)
+
+        # Test conversion with landsraad bonus active
+        with patch('utils.helpers.get_database', return_value=test_database):
+            rate = await get_sand_per_melange_with_bonus()
+            assert rate == 37.5
+
+            # Test conversion calculation
+            melange, remaining = await convert_sand_to_melange(250)
+            assert melange == 6  # 250 / 37.5 = 6.67, truncated to 6
+            assert remaining == 25  # 250 - (6 * 37.5) = 25
+
+        # Set landsraad bonus to inactive
+        await test_database.set_landsraad_bonus_status(False)
+
+        # Test conversion with landsraad bonus inactive
+        with patch('utils.helpers.get_database', return_value=test_database):
+            rate = await get_sand_per_melange_with_bonus()
+            assert rate == 50.0
+
+            # Test conversion calculation
+            melange, remaining = await convert_sand_to_melange(250)
+            assert melange == 5  # 250 / 50 = 5
+            assert remaining == 0  # 250 - (5 * 50) = 0
 
     @pytest.mark.asyncio
     async def test_get_landsraad_bonus_status_active(self):

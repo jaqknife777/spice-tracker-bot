@@ -3,7 +3,7 @@ Helper functions used across multiple commands.
 """
 
 import os
-from database import Database
+from database_orm import Database
 
 # Initialize database (lazy initialization)
 database = None

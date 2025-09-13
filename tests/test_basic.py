@@ -33,8 +33,8 @@ class TestBasicImports:
 
     def test_database_module_import(self):
         """Test that the database module can be imported."""
-        import database
-        assert hasattr(database, 'Database')
+        import database_orm
+        assert hasattr(database_orm, 'Database')
 
     def test_bot_module_import(self):
         """Test that the bot module can be imported."""
@@ -115,7 +115,7 @@ class TestDatabaseStructure:
 
     def test_database_class_methods(self):
         """Test that the Database class has expected methods."""
-        from database import Database
+        from database_orm import Database
 
         # Check for essential methods
         essential_methods = [
@@ -178,10 +178,10 @@ class TestIntegrationBasics:
         # This test will fail if there are circular imports
         import commands
         import utils
-        import database
+        import database_orm
         import bot
 
         assert commands is not None
         assert utils is not None
-        assert database is not None
+        assert database_orm is not None
         assert bot is not None
