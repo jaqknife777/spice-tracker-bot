@@ -702,41 +702,6 @@ class Database:
                                         limit=limit, error=str(e))
                 raise e
 
-    async def get_setting(self, key):
-        """Get setting value"""
-        start_time = time.time()
-        async with self._get_connection() as conn:
-            try:
-                row = await conn.fetchrow(
-                    'SELECT value FROM settings WHERE key = $1',
-                    key
-                )
-
-                value = row['value'] if row else None
-                await self._log_operation("select", "settings", start_time, success=True,
-                                        key=key, found=value is not None)
-                return value
-            except Exception as e:
-                await self._log_operation("select", "settings", start_time, success=False,
-                                        key=key, error=str(e))
-                raise e
-
-    async def set_setting(self, key, value):
-        """Set setting value"""
-        start_time = time.time()
-        async with self._get_connection() as conn:
-            try:
-                await conn.execute(
-                    'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
-                    key, value
-                )
-
-                await self._log_operation("upsert", "settings", start_time, success=True,
-                                        key=key, value=value)
-            except Exception as e:
-                await self._log_operation("upsert", "settings", start_time, success=False,
-                                        key=key, value=value, error=str(e))
-                raise e
 
     async def reset_all_stats(self):
         """Reset all user statistics and deposits (respects foreign key constraints)"""

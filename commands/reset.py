@@ -43,7 +43,7 @@ async def reset(interaction, command_start, confirm: bool, use_followup: bool = 
     # Use utility function for embed building
     fields = {
         "📊 Reset Summary": f"**Users Affected:** {deleted_rows}\n**Data Cleared:** All harvest records and melange production",
-        "✅ What Remains": "Refinement rates and bot settings are preserved."
+        "✅ What Remains": "Refinement rates are preserved."
     }
 
     embed = build_status_embed(

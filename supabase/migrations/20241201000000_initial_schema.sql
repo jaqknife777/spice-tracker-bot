@@ -52,11 +52,6 @@ CREATE TABLE expedition_participants (
     FOREIGN KEY (user_id) REFERENCES users (user_id)
 );
 
--- Settings table - stores bot configuration
-CREATE TABLE settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
 
 -- Guild treasury table - tracks this guild's accumulated resources
 CREATE TABLE guild_treasury (
@@ -115,8 +110,6 @@ CREATE INDEX idx_guild_transactions_expedition_id ON guild_transactions (expedit
 CREATE INDEX idx_melange_payments_user_id ON melange_payments (user_id);
 CREATE INDEX idx_melange_payments_created_at ON melange_payments (created_at);
 
--- Default configuration
-INSERT INTO settings (key, value) VALUES ('sand_per_melange', '50');
 
 -- Initial guild treasury record
 INSERT INTO guild_treasury (total_sand, total_melange)
@@ -178,7 +171,6 @@ COMMENT ON TABLE users IS 'Discord user information with melange totals and paym
 COMMENT ON TABLE deposits IS 'Spice sand deposits that accumulate toward melange production';
 COMMENT ON TABLE expeditions IS 'Group expeditions with guild cuts';
 COMMENT ON TABLE expedition_participants IS 'Individual participation in expeditions';
-COMMENT ON TABLE settings IS 'Bot configuration settings';
 COMMENT ON TABLE guild_treasury IS 'This guild''s resource accumulation (per-guild database)';
 COMMENT ON TABLE guild_transactions IS 'Audit trail for guild treasury operations';
 COMMENT ON TABLE melange_payments IS 'Records of melange payments made to users';

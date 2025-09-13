@@ -62,7 +62,6 @@ Write-Host ""
 Write-Host "📊 Your database is now ready with:" -ForegroundColor Cyan
 Write-Host "   • Users table for tracking players" -ForegroundColor White
 Write-Host "   • Deposits table for spice sand harvests" -ForegroundColor White
-Write-Host "   • Settings table for bot configuration" -ForegroundColor White
 Write-Host "   • Audit log for tracking changes" -ForegroundColor White
 Write-Host "   • Optimized indexes for performance" -ForegroundColor White
 Write-Host "   • Row Level Security enabled" -ForegroundColor White

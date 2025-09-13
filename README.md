@@ -137,7 +137,6 @@ The bot includes:
 - **`guild_treasury`** - Guild's accumulated sand and melange reserves
 - **`guild_transactions`** - Treasury operation audit trail
 - **`melange_payments`** - Payment records with amounts and timestamps
-- **`settings`** - Bot configuration and guild-specific settings
 
 ### Database Views
 - **`user_stats`** - Comprehensive user statistics with pending payments
