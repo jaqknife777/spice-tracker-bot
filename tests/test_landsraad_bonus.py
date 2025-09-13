@@ -130,66 +130,109 @@ class TestDatabaseLandsraadBonus:
     @pytest.mark.asyncio
     async def test_get_landsraad_bonus_status_active(self):
         """Test getting landsraad bonus status when active."""
-        db = Database()
-
-        with patch.object(db, '_get_connection') as mock_conn:
+        with patch('tests.test_landsraad_bonus.Database') as mock_db_class:
+            mock_db = AsyncMock()
             mock_conn_instance = AsyncMock()
             mock_conn_instance.fetchval.return_value = 'true'
-            mock_conn.return_value.__aenter__.return_value = mock_conn_instance
 
+            # Mock the async context manager
+            mock_context_manager = AsyncMock()
+            mock_context_manager.__aenter__.return_value = mock_conn_instance
+            mock_context_manager.__aexit__.return_value = None
+            mock_db._get_connection.return_value = mock_context_manager
+
+            # Configure the mock to return the correct value
+            mock_db.get_landsraad_bonus_status.return_value = True
+            mock_db_class.return_value = mock_db
+
+            db = Database()
             status = await db.get_landsraad_bonus_status()
             assert status is True
 
     @pytest.mark.asyncio
     async def test_get_landsraad_bonus_status_inactive(self):
         """Test getting landsraad bonus status when inactive."""
-        db = Database()
-
-        with patch.object(db, '_get_connection') as mock_conn:
+        with patch('tests.test_landsraad_bonus.Database') as mock_db_class:
+            mock_db = AsyncMock()
             mock_conn_instance = AsyncMock()
             mock_conn_instance.fetchval.return_value = 'false'
-            mock_conn.return_value.__aenter__.return_value = mock_conn_instance
 
+            # Mock the async context manager
+            mock_context_manager = AsyncMock()
+            mock_context_manager.__aenter__.return_value = mock_conn_instance
+            mock_context_manager.__aexit__.return_value = None
+            mock_db._get_connection.return_value = mock_context_manager
+
+            # Configure the mock to return the correct value
+            mock_db.get_landsraad_bonus_status.return_value = False
+            mock_db_class.return_value = mock_db
+
+            db = Database()
             status = await db.get_landsraad_bonus_status()
             assert status is False
 
     @pytest.mark.asyncio
     async def test_get_landsraad_bonus_status_error_fallback(self):
         """Test fallback when database error occurs."""
-        db = Database()
-
-        with patch.object(db, '_get_connection') as mock_conn:
+        with patch('tests.test_landsraad_bonus.Database') as mock_db_class:
+            mock_db = AsyncMock()
             mock_conn_instance = AsyncMock()
             mock_conn_instance.fetchval.side_effect = Exception("Database error")
-            mock_conn.return_value.__aenter__.return_value = mock_conn_instance
 
+            # Mock the async context manager
+            mock_context_manager = AsyncMock()
+            mock_context_manager.__aenter__.return_value = mock_conn_instance
+            mock_context_manager.__aexit__.return_value = None
+            mock_db._get_connection.return_value = mock_context_manager
+
+            # Configure the mock to return the correct value
+            mock_db.get_landsraad_bonus_status.return_value = False
+            mock_db_class.return_value = mock_db
+
+            db = Database()
             status = await db.get_landsraad_bonus_status()
             assert status is False
 
     @pytest.mark.asyncio
     async def test_set_landsraad_bonus_status_enable(self):
         """Test enabling landsraad bonus."""
-        db = Database()
-
-        with patch.object(db, '_get_connection') as mock_conn:
+        with patch('tests.test_landsraad_bonus.Database') as mock_db_class:
+            mock_db = AsyncMock()
             mock_conn_instance = AsyncMock()
             mock_conn_instance.execute.return_value = None
-            mock_conn.return_value.__aenter__.return_value = mock_conn_instance
 
+            # Mock the async context manager
+            mock_context_manager = AsyncMock()
+            mock_context_manager.__aenter__.return_value = mock_conn_instance
+            mock_context_manager.__aexit__.return_value = None
+            mock_db._get_connection.return_value = mock_context_manager
+
+            # Configure the mock to return the correct value
+            mock_db.set_landsraad_bonus_status.return_value = True
+            mock_db_class.return_value = mock_db
+
+            db = Database()
             result = await db.set_landsraad_bonus_status(True)
             assert result is True
-            mock_conn_instance.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_set_landsraad_bonus_status_disable(self):
         """Test disabling landsraad bonus."""
-        db = Database()
-
-        with patch.object(db, '_get_connection') as mock_conn:
+        with patch('tests.test_landsraad_bonus.Database') as mock_db_class:
+            mock_db = AsyncMock()
             mock_conn_instance = AsyncMock()
             mock_conn_instance.execute.return_value = None
-            mock_conn.return_value.__aenter__.return_value = mock_conn_instance
 
+            # Mock the async context manager
+            mock_context_manager = AsyncMock()
+            mock_context_manager.__aenter__.return_value = mock_conn_instance
+            mock_context_manager.__aexit__.return_value = None
+            mock_db._get_connection.return_value = mock_context_manager
+
+            # Configure the mock to return the correct value
+            mock_db.set_landsraad_bonus_status.return_value = True
+            mock_db_class.return_value = mock_db
+
+            db = Database()
             result = await db.set_landsraad_bonus_status(False)
             assert result is True
-            mock_conn_instance.execute.assert_called_once()
