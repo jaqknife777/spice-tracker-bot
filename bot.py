@@ -124,13 +124,19 @@ async def on_ready():
 # Register commands with the bot's command tree
 def register_commands():
     """Register all commands explicitly with their exact signatures"""
-    from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, pay, payroll, treasury, guild_withdraw, pending, water, landsraad, perms
+    from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, pay, payroll, treasury, guild_withdraw, pending, water, landsraad, perms, calc
 
     # Sand command (formerly harvest)
     @bot.tree.command(name="sand", description="Convert spice sand into melange (50:1 ratio)")
     @app_commands.describe(amount="Amount of spice sand to convert (1-10,000)")
     async def sand_cmd(interaction: discord.Interaction, amount: int):  # noqa: F841
         await sand(interaction, amount)
+
+    # Calc command (no DB write)
+    @bot.tree.command(name="calc", description="Estimate melange from a sand amount (no database update)")
+    @app_commands.describe(amount="Amount of spice sand to calculate (min 1)")
+    async def calc_cmd(interaction: discord.Interaction, amount: int):  # noqa: F841
+        await calc(interaction, amount)
 
     # Refinery command
     @bot.tree.command(name="refinery", description="View your melange production and payment status")
