@@ -3,7 +3,8 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-#app = 'spice-tracker-bot-wlpasq'
+# Do not set this. Pass it as FLY_APP
+#app = ''
 primary_region = 'iad'
 
 [build]
