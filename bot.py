@@ -15,6 +15,7 @@ import socketserver
 import threading
 import requests
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 # Import utility modules
 from utils.logger import logger
@@ -522,6 +523,47 @@ if __name__ == '__main__':
 
     keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
     keep_alive_thread.start()
+
+    # Validate Supabase connection string is a direct (non-pooled) URL on port 5432
+    database_url = os.getenv('DATABASE_URL', '')
+    try:
+        if database_url:
+            parsed = urlparse(database_url)
+            # Only validate for postgres URLs that target Supabase
+            if parsed.scheme.startswith('postgres'):
+                hostname = (parsed.hostname or '').lower()
+                is_supabase = 'supabase.' in hostname
+                if is_supabase:
+                    # Strict validation against the documented direct connection format
+                    errors = []
+
+                    # 1) Scheme must be postgresql+asyncpg
+                    if parsed.scheme != 'postgresql+asyncpg':
+                        errors.append("scheme must be 'postgresql+asyncpg'")
+
+                    # 2) Host must match db.[PROJECT].supabase.co (or .supabase.net)
+                    valid_host = (
+                        hostname.startswith('db.') and (hostname.endswith('.supabase.co') or hostname.endswith('.supabase.net'))
+                    )
+                    if not valid_host:
+                        errors.append("host must be 'db.[PROJECT].supabase.co' (or .supabase.net)")
+
+                    # 3) Port must be 5432 (non-pooled direct connection)
+                    port = parsed.port
+                    if port is None or port != 5432:
+                        errors.append("port must be 5432 (direct, non-pooled)")
+
+                    # 4) Database name path must be present (e.g., /postgres)
+                    if not parsed.path or parsed.path == '/':
+                        errors.append("database name missing in path (e.g., '/postgres')")
+
+                    if errors:
+                        for issue in errors:
+                            logger.error("Invalid Supabase DATABASE_URL: " + issue, hostname=hostname)
+                        logger.error("Example format: postgresql+asyncpg://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres")
+                        exit(1)
+    except Exception as e:
+        logger.warning("DATABASE_URL validation failed; proceeding anyway", error=str(e))
 
     token = os.getenv('DISCORD_TOKEN')
     if not token:

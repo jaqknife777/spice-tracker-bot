@@ -93,6 +93,12 @@ python migrate.py stamp
 3. Add to your `.env` file: `DATABASE_URL=your_supabase_connection_string`
 4. Apply migrations: `python migrate.py apply`
 
+> Note: Use a direct (non-pooled) Supabase connection string. Do not use the pooled/PgBouncer URI. In Supabase, copy the "Connection string" for direct connections using asyncpg rather than the pooled one. Example:
+>
+> ```env
+> DATABASE_URL=postgresql+asyncpg://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres
+> ```
+
 ### Quick Reference
 ```bash
 # Database migrations
