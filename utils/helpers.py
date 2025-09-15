@@ -3,6 +3,7 @@ Helper functions used across multiple commands.
 """
 
 import os
+from typing import List
 from database_orm import Database
 
 # Initialize database (lazy initialization)
@@ -88,15 +89,11 @@ async def send_response(interaction, content=None, embed=None, ephemeral=False, 
 
     try:
         if use_followup:
-            if content:
-                await interaction.followup.send(content, ephemeral=ephemeral)
-            elif embed:
-                await interaction.followup.send(embed=embed)
+            if content is not None or embed is not None:
+                await interaction.followup.send(content=content if content is not None else None, embed=embed, ephemeral=ephemeral)
         else:
-            if content:
-                await interaction.channel.send(content)
-            elif embed:
-                await interaction.channel.send(embed=embed)
+            if content is not None or embed is not None:
+                await interaction.channel.send(content=content if content is not None else None, embed=embed)
 
         response_time = time.time() - start_time
         logger.info(f"Response sent successfully",
@@ -113,10 +110,8 @@ async def send_response(interaction, content=None, embed=None, ephemeral=False, 
                     error=str(e))
         # Fallback to channel if followup fails
         try:
-            if content:
-                await interaction.channel.send(content)
-            elif embed:
-                await interaction.channel.send(embed=embed)
+            if content is not None or embed is not None:
+                await interaction.channel.send(content=content if content is not None else None, embed=embed)
 
             fallback_time = time.time() - start_time
             logger.info(f"Fallback response sent successfully",
@@ -130,3 +125,36 @@ async def send_response(interaction, content=None, embed=None, ephemeral=False, 
                         original_error=str(e),
                         fallback_error=str(fallback_error))
             # Last resort - just log the error, don't raise
+
+
+def build_admin_officer_role_mentions() -> str:
+    """Build a mention string for configured admin and officer roles.
+
+    Returns:
+        A space-separated string of role mentions like "<@&123> <@&456>", or an empty string
+        if no roles are configured or on error.
+    """
+    from utils.logger import logger
+    try:
+        from utils.permissions import get_admin_role_ids, get_officer_role_ids
+
+        admin_role_ids: List[int] = get_admin_role_ids()
+        officer_role_ids: List[int] = get_officer_role_ids()
+
+        role_ids: List[int] = []
+        if admin_role_ids:
+            role_ids.extend(admin_role_ids)
+        if officer_role_ids:
+            role_ids.extend(officer_role_ids)
+
+        seen = set()
+        mentions: List[str] = []
+        for role_id in role_ids:
+            if role_id not in seen:
+                seen.add(role_id)
+                mentions.append(f"<@&{role_id}>")
+
+        return " ".join(mentions)
+    except Exception as e:
+        logger.warning(f"Failed to build admin/officer role mentions: {e}")
+        return ""

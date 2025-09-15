@@ -6,7 +6,7 @@ import time
 from utils.embed_utils import build_info_embed, build_status_embed
 from utils.command_utils import log_command_metrics
 from utils.base_command import command
-from utils.helpers import send_response
+from utils.helpers import send_response, build_admin_officer_role_mentions
 from utils.logger import logger
 
 # Command metadata
@@ -46,7 +46,9 @@ async def water(interaction, command_start, destination: str = "DD base", use_fo
 
     # Send the water request message
     response_start = time.time()
-    await send_response(interaction, embed=embed.build(), use_followup=use_followup, ephemeral=False)
+    # Send a single message containing the role mentions and the embed
+    mentions_text = build_admin_officer_role_mentions()
+    await send_response(interaction, content=mentions_text if mentions_text else None, embed=embed.build(), use_followup=use_followup, ephemeral=False)
     response_time = time.time() - response_start
 
     # Add checkmark reaction for admin approval
