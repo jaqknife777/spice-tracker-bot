@@ -121,15 +121,22 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
         # Calculate remaining melange that goes to guild
         total_user_melange = sum(melange for melange, _ in unique_distributions.values())
         guild_melange = total_melange - total_user_melange
-        guild_sand = remaining_sand  # This is the actual sand amount for the treasury.
-        guild_sand_for_display = int(guild_melange * conversion_rate) + remaining_sand
+
+        guild_sand = remaining_sand  # Any leftover sand also goes to guild
+
+        # For display purposes, calculate the sand equivalent of the melange
+        display_guild_sand = int(guild_melange * conversion_rate) + guild_sand
+
+        # Calculate the total sand value of the guild's cut for percentage calculation
+        total_guild_sand_value = (guild_melange * conversion_rate) + guild_sand
+
 
         # Ensure the initiator exists in the users table
         from utils.database_utils import validate_user_exists
         await validate_user_exists(get_database(), str(interaction.user.id), interaction.user.display_name)
 
         # Create expedition record (guild percentage is now calculated based on actual distribution)
-        actual_guild_percentage = ((guild_melange + guild_sand) / total_sand) * 100 if total_sand > 0 else 0
+        actual_guild_percentage = (total_guild_sand_value / total_sand) * 100 if total_sand > 0 else 0
         expedition_id = await get_database().create_expedition(
             str(interaction.user.id),
             interaction.user.display_name,
@@ -203,7 +210,7 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
 
         fields = {
             "👥 Participants": "\n".join(participant_details),
-            "🏛️ Guild Cut": f"**{actual_guild_percentage:.1f}%** = {guild_sand:,} sand + **{guild_melange:,} melange**",
+            "🏛️ Guild Cut": f"**{actual_guild_percentage:.1f}%** = {display_guild_sand:,} sand + **{guild_melange:,} melange**",
             "📊 Summary": f"**Total:** {total_sand:,} sand → **{total_melange:,} melange** | **Users:** **{total_user_melange:,} melange** | **Guild:** **{guild_melange:,} melange**"
         }
 
