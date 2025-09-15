@@ -103,7 +103,6 @@ class ExpeditionParticipant(Base):
     sand_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     melange_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     is_harvester: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=lambda: datetime.utcnow())
 
     # Relationships
     expedition: Mapped["Expedition"] = relationship("Expedition", back_populates="participants")
@@ -794,7 +793,7 @@ class Database:
                 participants_result = await session.execute(
                     select(ExpeditionParticipant)
                     .where(ExpeditionParticipant.expedition_id == expedition_id)
-                    .order_by(ExpeditionParticipant.created_at)
+                    .order_by(ExpeditionParticipant.id)
                 )
                 participants = participants_result.scalars().all()
 
@@ -817,8 +816,7 @@ class Database:
                         'username': participant.username,
                         'sand_amount': participant.sand_amount,
                         'melange_amount': participant.melange_amount,
-                        'is_harvester': participant.is_harvester,
-                        'created_at': participant.created_at
+                        'is_harvester': participant.is_harvester
                     })
 
                 await self._log_operation("select", "expedition_participants", start_time, success=True,
