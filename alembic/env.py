@@ -62,11 +62,8 @@ def run_migrations_online() -> None:
     """
     # Override the database URL with environment variable
     configuration = config.get_section(config.config_ini_section, {})
-    db_url = os.environ.get('DATABASE_URL')
-    if db_url:
-        # Alembic needs a sync driver
-        sync_db_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
-        configuration['sqlalchemy.url'] = sync_db_url
+    if 'DATABASE_URL' in os.environ:
+        configuration['sqlalchemy.url'] = os.environ['DATABASE_URL']
     else:
         # Fallback to a default SQLite URL for development
         configuration['sqlalchemy.url'] = 'sqlite:///spice_tracker.db'
