@@ -89,11 +89,19 @@ async def send_response(interaction, content=None, embed=None, ephemeral=False, 
 
     try:
         if use_followup:
-            if content is not None or embed is not None:
-                await interaction.followup.send(content=content if content is not None else None, embed=embed, ephemeral=ephemeral)
+            if embed is not None and content is None:
+                await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+            elif embed is None and content is not None:
+                await interaction.followup.send(content, ephemeral=ephemeral)
+            elif embed is not None and content is not None:
+                await interaction.followup.send(content=content, embed=embed, ephemeral=ephemeral)
         else:
-            if content is not None or embed is not None:
-                await interaction.channel.send(content=content if content is not None else None, embed=embed)
+            if embed is not None and content is None:
+                await interaction.channel.send(embed=embed)
+            elif embed is None and content is not None:
+                await interaction.channel.send(content)
+            elif embed is not None and content is not None:
+                await interaction.channel.send(content=content, embed=embed)
 
         response_time = time.time() - start_time
         logger.info(f"Response sent successfully",
@@ -110,8 +118,12 @@ async def send_response(interaction, content=None, embed=None, ephemeral=False, 
                     error=str(e))
         # Fallback to channel if followup fails
         try:
-            if content is not None or embed is not None:
-                await interaction.channel.send(content=content if content is not None else None, embed=embed)
+            if embed is not None and content is None:
+                await interaction.channel.send(embed=embed)
+            elif embed is None and content is not None:
+                await interaction.channel.send(content)
+            elif embed is not None and content is not None:
+                await interaction.channel.send(content=content, embed=embed)
 
             fallback_time = time.time() - start_time
             logger.info(f"Fallback response sent successfully",
