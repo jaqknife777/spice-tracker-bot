@@ -108,7 +108,6 @@ jobs:
   security:
     name: Security Checks
     runs-on: ubuntu-latest
-    needs: test
 
     steps:
     - name: Checkout code
@@ -142,7 +141,6 @@ jobs:
   dependency-check:
     name: Dependency Check
     runs-on: ubuntu-latest
-    needs: test
 
     steps:
     - name: Checkout code
