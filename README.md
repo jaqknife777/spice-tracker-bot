@@ -219,11 +219,53 @@ The bot includes:
 | `DATABASE_URL` | Supabase PostgreSQL connection string | ✅ | - |
 | `BOT_OWNER_ID` | Discord user ID for bot owner commands | ✅ | - |
 | `AUTO_SYNC_COMMANDS` | Auto-sync slash commands on startup | ❌ | `true` |
+| `CMD_PREFIX` | Prefix added to all slash command names | ❌ | - |
+| `CMD_NAME_OVERRIDES` | Rename specific commands (JSON or CSV map) | ❌ | - |
 | `COMMAND_PERMISSION_OVERRIDES` | Override command permissions (format: `cmd:level`) | ❌ | - |
 | `ADMIN_ROLE_IDS` | Comma-separated admin Discord role IDs | ❌ | - |
 | `OFFICER_ROLE_IDS` | Comma-separated officer Discord role IDs | ❌ | - |
 | `ALLOWED_ROLE_IDS` | Comma-separated roles allowed to use user-level cmds | ❌ | - |
 | `PORT` | Health server port (Fly/containers) | ❌ | `8080` |
+
+### Command customization (names and permissions)
+
+You can customize both the registered slash command names and their required permission levels via environment variables.
+
+1) Prefix all command names
+```bash
+# Registers /dev_sand, /dev_calc, ...
+export CMD_PREFIX="dev_"
+```
+
+2) Rename specific commands
+```bash
+# JSON format
+export CMD_NAME_OVERRIDES='{"sand":"harvest","calc":"estimate"}'
+
+# or CSV key=value pairs
+export CMD_NAME_OVERRIDES='sand=harvest,calc=estimate'
+```
+
+3) Override command permission levels
+```bash
+# Make reset command officer-only instead of admin
+export COMMAND_PERMISSION_OVERRIDES="reset:officer"
+
+# Make sand command public
+export COMMAND_PERMISSION_OVERRIDES="sand:any"
+
+# Multiple overrides
+export COMMAND_PERMISSION_OVERRIDES="reset:officer,sand:any,help:user"
+```
+
+4) Apply changes
+- If `AUTO_SYNC_COMMANDS=true` (default), changes will sync on startup.
+- Otherwise, run the owner-only `/sync` command after the bot is online.
+
+Notes:
+- Only the registered slash names change; internal Python function names remain the same.
+- You can combine prefix and overrides. Name overrides are applied after prefixing.
+- Permission levels: `admin` → `officer` → `user` → `any` (public)
 
 ## 🏗️ Technical Architecture
 

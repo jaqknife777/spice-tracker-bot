@@ -126,25 +126,54 @@ def register_commands():
     """Register all commands explicitly with their exact signatures"""
     from commands import sand, refinery, leaderboard, split, help, reset, ledger, expedition, pay, payroll, treasury, guild_withdraw, pending, water, landsraad, perms, calc
 
+    # Helper to allow env-based command renaming/prefixing
+    # CMD_PREFIX: optional string prefix added to every command name
+    # CMD_NAME_OVERRIDES: JSON or comma-separated mapping like "sand=harvest,calc=estimate"
+    def _build_cmd_name_resolver():
+        import json
+        prefix = os.getenv('CMD_PREFIX', '')
+        overrides_env = os.getenv('CMD_NAME_OVERRIDES', '')
+        overrides = {}
+        if overrides_env:
+            try:
+                overrides = json.loads(overrides_env)
+            except Exception:
+                # Fallback to comma-separated key=value pairs
+                for pair in overrides_env.split(','):
+                    if '=' in pair:
+                        key, value = pair.split('=', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        if key and value:
+                            overrides[key] = value
+
+        def cmd_name(base: str) -> str:
+            name = overrides.get(base, base)
+            return f"{prefix}{name}" if prefix else name
+
+        return cmd_name
+
+    cmd_name = _build_cmd_name_resolver()
+
     # Sand command (formerly harvest)
-    @bot.tree.command(name="sand", description="Convert spice sand into melange (50:1 ratio)")
+    @bot.tree.command(name=cmd_name("sand"), description="Convert spice sand into melange (50:1 ratio)")
     @app_commands.describe(amount="Amount of spice sand to convert (1-10,000)")
     async def sand_cmd(interaction: discord.Interaction, amount: int):  # noqa: F841
         await sand(interaction, amount)
 
     # Calc command (no DB write)
-    @bot.tree.command(name="calc", description="Estimate melange from a sand amount (no database update)")
+    @bot.tree.command(name=cmd_name("calc"), description="Estimate melange from a sand amount (no database update)")
     @app_commands.describe(amount="Amount of spice sand to calculate (min 1)")
     async def calc_cmd(interaction: discord.Interaction, amount: int):  # noqa: F841
         await calc(interaction, amount)
 
     # Refinery command
-    @bot.tree.command(name="refinery", description="View your melange production and payment status")
+    @bot.tree.command(name=cmd_name("refinery"), description="View your melange production and payment status")
     async def refinery_cmd(interaction: discord.Interaction):  # noqa: F841
         await refinery(interaction)
 
     # Leaderboard command
-    @bot.tree.command(name="leaderboard", description="Display top spice refiners by melange production")
+    @bot.tree.command(name=cmd_name("leaderboard"), description="Display top spice refiners by melange production")
     @app_commands.describe(limit="Number of top refiners to display (5-25, default: 10)")
     async def leaderboard_cmd(interaction: discord.Interaction, limit: int = 10):  # noqa: F841
         await leaderboard(interaction, limit)
@@ -152,7 +181,7 @@ def register_commands():
 
 
     # Split command
-    @bot.tree.command(name="split", description="Split spice sand among expedition members and convert to melange")
+    @bot.tree.command(name=cmd_name("split"), description="Split spice sand among expedition members and convert to melange")
     @app_commands.describe(
         total_sand="Total spice sand to split and convert",
         users="Users and percentages: '@user1 50 @user2 @user3' (users without % split equally)",
@@ -162,34 +191,34 @@ def register_commands():
         await split(interaction, total_sand, users, guild)
 
     # Help command
-    @bot.tree.command(name="help", description="Show all available spice tracking commands")
+    @bot.tree.command(name=cmd_name("help"), description="Show all available spice tracking commands")
     async def help_cmd(interaction: discord.Interaction):  # noqa: F841
         await help(interaction)
 
     # Perms command
-    @bot.tree.command(name="perms", description="Show your permission status and matched roles")
+    @bot.tree.command(name=cmd_name("perms"), description="Show your permission status and matched roles")
     async def perms_cmd(interaction: discord.Interaction):  # noqa: F841
         await perms(interaction)
 
     # Reset command
-    @bot.tree.command(name="reset", description="Reset all spice refinery statistics (Admin only - USE WITH CAUTION)")
+    @bot.tree.command(name=cmd_name("reset"), description="Reset all spice refinery statistics (Admin only - USE WITH CAUTION)")
     @app_commands.describe(confirm="Confirm that you want to delete all refinery data (True/False)")
     async def reset_cmd(interaction: discord.Interaction, confirm: bool):  # noqa: F841
         await reset(interaction, confirm)
 
     # Ledger command
-    @bot.tree.command(name="ledger", description="View your complete spice harvest ledger")
+    @bot.tree.command(name=cmd_name("ledger"), description="View your complete spice harvest ledger")
     async def ledger_cmd(interaction: discord.Interaction):  # noqa: F841
         await ledger(interaction)
 
     # Expedition command
-    @bot.tree.command(name="expedition", description="View details of a specific expedition")
+    @bot.tree.command(name=cmd_name("expedition"), description="View details of a specific expedition")
     @app_commands.describe(expedition_id="ID of the expedition to view")
     async def expedition_cmd(interaction: discord.Interaction, expedition_id: int):  # noqa: F841
         await expedition(interaction, expedition_id)
 
     # Pay command (formerly payment)
-    @bot.tree.command(name="pay", description="Process melange payment for a user (Admin only)")
+    @bot.tree.command(name=cmd_name("pay"), description="Process melange payment for a user (Admin only)")
     @app_commands.describe(
         user="User to pay",
         amount="Amount of melange to pay (optional, defaults to full pending amount)"
@@ -198,17 +227,17 @@ def register_commands():
         await pay(interaction, user, amount)
 
     # Payroll command
-    @bot.tree.command(name="payroll", description="Process payments for all unpaid harvesters (Admin only)")
+    @bot.tree.command(name=cmd_name("payroll"), description="Process payments for all unpaid harvesters (Admin only)")
     async def payroll_cmd(interaction: discord.Interaction):  # noqa: F841
         await payroll(interaction)
 
     # Treasury command
-    @bot.tree.command(name="treasury", description="View guild treasury balance and statistics")
+    @bot.tree.command(name=cmd_name("treasury"), description="View guild treasury balance and statistics")
     async def treasury_cmd(interaction: discord.Interaction):  # noqa: F841
         await treasury(interaction)
 
     # Guild Withdraw command
-    @bot.tree.command(name="guild_withdraw", description="Withdraw sand from guild treasury to give to a user (Admin only)")
+    @bot.tree.command(name=cmd_name("guild_withdraw"), description="Withdraw sand from guild treasury to give to a user (Admin only)")
     @app_commands.describe(
         user="User to give sand to",
         amount="Amount of sand to withdraw from guild treasury"
@@ -217,18 +246,18 @@ def register_commands():
         await guild_withdraw(interaction, user, amount)
 
     # Pending command
-    @bot.tree.command(name="pending", description="View all users with pending melange payments (Admin only)")
+    @bot.tree.command(name=cmd_name("pending"), description="View all users with pending melange payments (Admin only)")
     async def pending_cmd(interaction: discord.Interaction):  # noqa: F841
         await pending(interaction)
 
     # Water command
-    @bot.tree.command(name="water", description="Request a water delivery to a specific location")
+    @bot.tree.command(name=cmd_name("water"), description="Request a water delivery to a specific location")
     @app_commands.describe(destination="Destination for water delivery (default: DD base)")
     async def water_cmd(interaction: discord.Interaction, destination: str = "DD base"):  # noqa: F841
         await water(interaction, destination)
 
     # Landsraad command
-    @bot.tree.command(name="landsraad", description="Manage the landsraad bonus for melange conversion")
+    @bot.tree.command(name=cmd_name("landsraad"), description="Manage the landsraad bonus for melange conversion")
     @app_commands.describe(
         action="Action to perform: 'status', 'enable', 'disable'",
         confirm="Confirmation required for enable/disable actions"
@@ -237,7 +266,7 @@ def register_commands():
         await landsraad(interaction, action, confirm)
 
     # Sync command (slash command version)
-    @bot.tree.command(name="sync", description="Sync slash commands (Bot Owner Only)")
+    @bot.tree.command(name=cmd_name("sync"), description="Sync slash commands (Bot Owner Only)")
     async def sync_cmd(interaction: discord.Interaction):  # noqa: F841
         if interaction.user.id != int(os.getenv('BOT_OWNER_ID', '0')):
             await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
