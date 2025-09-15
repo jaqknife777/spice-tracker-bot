@@ -210,7 +210,7 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
 
         fields = {
             "👥 Participants": "\n".join(participant_details),
-            "🏛️ Guild Cut": f"**{actual_guild_percentage:.1f}%** = {display_guild_sand:,} sand + **{guild_melange:,} melange**",
+            "🏛️ Guild Cut": f"**{actual_guild_percentage:.1f}%** ({display_guild_sand:,} sand value) = **{guild_melange:,} melange** + {guild_sand:,} sand",
             "📊 Summary": f"**Total:** {total_sand:,} sand → **{total_melange:,} melange** | **Users:** **{total_user_melange:,} melange** | **Guild:** **{guild_melange:,} melange**"
         }
 
