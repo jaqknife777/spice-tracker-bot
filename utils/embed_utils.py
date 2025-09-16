@@ -49,7 +49,7 @@ def build_success_embed(title: str, success_message: str, footer: str = None,
 
 
 def build_info_embed(title: str, info_message: str, footer: str = None,
-                    timestamp=None, , color: int = 0x3498DB) -> EmbedBuilder:
+                    timestamp=None, color: int = 0x3498DB) -> EmbedBuilder:
     """Build a standardized info embed"""
     return build_status_embed(
         title=title,
