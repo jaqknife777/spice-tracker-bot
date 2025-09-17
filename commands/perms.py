@@ -11,6 +11,7 @@ from utils.permissions import (
     is_allowed_user,
     get_admin_role_ids,
     get_officer_role_ids,
+    get_allowed_role_ids,
 )
 
 
@@ -35,12 +36,14 @@ async def perms(interaction, command_start, use_followup: bool = True):
     # Gather configured role IDs
     configured_admin_roles = get_admin_role_ids()
     configured_officer_roles = get_officer_role_ids()
+    configured_allowed_roles = get_allowed_role_ids()
 
     # Determine role matches on the user
     user_role_ids = []
     user_role_names = []
     matched_admin_roles = []
     matched_officer_roles = []
+    matched_allowed_roles = []
 
     if hasattr(interaction.user, 'roles') and interaction.user.roles:
         user_role_ids = [getattr(role, 'id', None) for role in interaction.user.roles if hasattr(role, 'id')]
@@ -48,6 +51,7 @@ async def perms(interaction, command_start, use_followup: bool = True):
 
         matched_admin_roles = [str(rid) for rid in user_role_ids if rid in configured_admin_roles]
         matched_officer_roles = [str(rid) for rid in user_role_ids if rid in configured_officer_roles]
+        matched_allowed_roles = [str(rid) for rid in user_role_ids if rid in configured_allowed_roles]
 
     # Build fields for the embed
     fields = {
@@ -60,7 +64,8 @@ async def perms(interaction, command_start, use_followup: bool = True):
         ),
         "🧩 Configured Role IDs": (
             f"admins: {', '.join(map(str, configured_admin_roles)) if configured_admin_roles else '—'}\n"
-            f"officers: {', '.join(map(str, configured_officer_roles)) if configured_officer_roles else '—'}"
+            f"officers: {', '.join(map(str, configured_officer_roles)) if configured_officer_roles else '—'}\n"
+            f"allowed: {', '.join(map(str, configured_allowed_roles)) if configured_allowed_roles else '— (all users)'}"
         ),
         "🧑 Your Roles": (
             f"names: {', '.join(user_role_names) if user_role_names else '—'}\n"
@@ -68,7 +73,8 @@ async def perms(interaction, command_start, use_followup: bool = True):
         ),
         "✅ Matches": (
             f"admin roles: {', '.join(matched_admin_roles) if matched_admin_roles else '—'}\n"
-            f"officer roles: {', '.join(matched_officer_roles) if matched_officer_roles else '—'}"
+            f"officer roles: {', '.join(matched_officer_roles) if matched_officer_roles else '—'}\n"
+            f"allowed roles: {', '.join(matched_allowed_roles) if matched_allowed_roles else '—'}"
         ),
     }
 
