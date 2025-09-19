@@ -5,11 +5,12 @@ Split command for dividing harvested spice sand among expedition members with gu
 # Command metadata
 COMMAND_METADATA = {
     'aliases': [],
-    'description': "Split spice sand among expedition members and convert to melange with guild cut",
+    'description': "Split spice sand among expedition members and convert to melange with guild cut.",
     'params': {
-        'total_sand': "Total spice sand collected to split",
-        'users': "Users and percentages: '@user1 50 @user2 @user3' (users without % split equally)",
-        'guild': "Guild cut percentage (default: 10)"
+        'total_sand': "Total spice sand collected to split.",
+        'users': "Users to include in the split (e.g., '@user1 @user2').",
+        'guild': "Guild cut percentage (default: 10).",
+        'user_cut': "Optional: Assign a uniform percentage to all users (e.g., 20 for 20%)."
     },
     'permission_level': 'user'
 }
@@ -18,12 +19,12 @@ import re
 import traceback
 import discord
 from utils.base_command import command
-from utils.helpers import get_database, convert_sand_to_melange, send_response
+from utils.helpers import get_database, convert_sand_to_melange, send_response, get_sand_per_melange_with_bonus
 from utils.logger import logger
 
 
 @command('split')
-async def split(interaction, command_start, total_sand: int, users: str, guild: int = 10, use_followup: bool = True):
+async def split(interaction, command_start, total_sand: int, users: str, guild: int = 10, user_cut: int = None, use_followup: bool = True):
     """Split spice sand among expedition members and convert to melange with guild cut"""
 
     try:
@@ -36,14 +37,14 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
             await send_response(interaction, "❌ Guild cut percentage must be between 0 and 100.", use_followup=use_followup, ephemeral=True)
             return
 
+        # Validate user_cut if provided
+        if user_cut is not None and not 0 <= user_cut <= 100:
+            await send_response(interaction, "❌ User cut percentage must be between 0 and 100.", use_followup=use_followup, ephemeral=True)
+            return
+
         # Parse users string for mentions and percentages
-        # Format: "@user1 50 @user2 @user3 25" etc.
-        user_data = []
         percentage_users = []
         equal_split_users = []
-
-        # Extract user mentions and optional percentages
-        # Pattern: @user_id optionally followed by a number
         pattern = r'<@!?(\d+)>\s*(\d+)?'
         matches = re.findall(pattern, users)
 
@@ -53,64 +54,70 @@ async def split(interaction, command_start, total_sand: int, users: str, guild: 
                 "**Examples:**\n"
                 "• Equal split: `/split total_sand:1000 users:\"@user1 @user2\"`\n"
                 "• Percentage split: `/split total_sand:1000 users:\"@leader 60 @member1 @member2\"`\n"
-                "• Mixed: `/split total_sand:1000 users:\"@leader 40 @member1 @member2\" guild:5`",
+                "• Uniform cut: `/split total_sand:1000 users:\"@user1 @user2\" user_cut:20`",
                 use_followup=use_followup, ephemeral=True)
             return
 
+        # Process users and calculate total percentage
         total_percentage = 0
-        for user_id, percentage_str in matches:
-            if percentage_str:  # User has a percentage
-                percentage = int(percentage_str)
-                if not 0 <= percentage <= 100:
-                    await send_response(interaction, f"❌ Percentage {percentage} is invalid. Must be between 0-100.", use_followup=use_followup, ephemeral=True)
-                    return
-                percentage_users.append((user_id, percentage))
-                total_percentage += percentage
-            else:  # User will get equal split
-                equal_split_users.append(user_id)
+        if user_cut is not None:
+            if any(percentage_str for _, percentage_str in matches):
+                await send_response(interaction, "❌ You cannot provide individual percentages when using `user_cut`.", use_followup=use_followup, ephemeral=True)
+                return
+            percentage_users = [(user_id, user_cut) for user_id, _ in matches]
+            total_percentage = len(matches) * user_cut
+        else:
+            for user_id, percentage_str in matches:
+                if percentage_str:
+                    percentage = int(percentage_str)
+                    if not 0 <= percentage <= 100:
+                        await send_response(interaction, f"❌ Percentage {percentage} is invalid. Must be between 0-100.", use_followup=use_followup, ephemeral=True)
+                        return
+                    percentage_users.append((user_id, percentage))
+                    total_percentage += percentage
+                else:
+                    equal_split_users.append(user_id)
 
-        # Validate percentages don't exceed 100%
+        # Validate and adjust percentages
         if total_percentage > 100:
             await send_response(interaction, f"❌ Total user percentages ({total_percentage}%) cannot exceed 100%.", use_followup=use_followup, ephemeral=True)
             return
 
-        # Convert total sand to melange using utility method (handles landsraad bonus)
-        total_melange, remaining_sand = await convert_sand_to_melange(total_sand)
+        is_all_percentage = percentage_users and not equal_split_users
 
-        # Get conversion rate for expedition record and calculations
-        from utils.helpers import get_sand_per_melange_with_bonus
+        # If percentages are specified, they determine the guild cut. Warn if it differs from the input 'guild' value.
+        if is_all_percentage:
+            if total_percentage + guild != 100:
+                warning_message = f"⚠️ Note: User percentages ({total_percentage}%) and the specified guild cut ({guild}%) do not sum to 100%. The guild cut will be adjusted to be the remainder."
+                await send_response(interaction, warning_message, use_followup=use_followup, ephemeral=True)
+        elif percentage_users and total_percentage + guild > 100:
+            original_guild_cut = guild
+            guild = 100 - total_percentage
+            warning_message = f"⚠️ Note: User percentages ({total_percentage}%) and the specified guild cut ({original_guild_cut}%) do not sum to 100%. The guild cut will be adjusted to be the remainder."
+            await send_response(interaction, warning_message, use_followup=use_followup, ephemeral=True)
+
+        # Convert total sand to melange
+        total_melange, remaining_sand = await convert_sand_to_melange(total_sand)
         conversion_rate = await get_sand_per_melange_with_bonus()
 
         # Calculate user melange distributions
         user_distributions = []
-        is_all_percentage = percentage_users and not equal_split_users
-
         if is_all_percentage:
             # --- All Percentage Mode ---
-            # Guild cut is the remainder. The 'guild' param is ignored.
             for user_id, percentage in percentage_users:
                 user_melange = int(total_melange * (percentage / 100))
                 user_distributions.append((user_id, user_melange, percentage))
         else:
             # --- Equal or Mixed Mode ---
-            # Guild cut is taken from the total first.
             guild_melange_cut = int(total_melange * (guild / 100))
             melange_for_players = total_melange - guild_melange_cut
-
-            # Calculate shares for percentage users from the total melange
             melange_given_to_percentage_users = 0
             for user_id, percentage in percentage_users:
                 user_melange = int(total_melange * (percentage / 100))
                 user_distributions.append((user_id, user_melange, percentage))
                 melange_given_to_percentage_users += user_melange
 
-            # The amount for equal split is what's left from the player pool
             melange_for_equal_split = melange_for_players - melange_given_to_percentage_users
-
-            if melange_for_equal_split < 0:
-                await send_response(interaction, f"❌ Invalid split: The sum of the guild cut ({guild}%) and user percentages ({total_percentage}%) exceeds 100%.", use_followup=use_followup, ephemeral=True)
-                return
-
             if equal_split_users:
                 equal_share = melange_for_equal_split // len(equal_split_users)
                 for user_id in equal_split_users:

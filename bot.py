@@ -189,11 +189,12 @@ def register_commands():
     @bot.tree.command(name=cmd_name("split"), description="Split spice sand among expedition members and convert to melange")
     @app_commands.describe(
         total_sand="Total spice sand to split and convert",
-        users="Users and percentages: '@user1 50 @user2 @user3' (users without % split equally)",
-        guild="Guild cut percentage (default: 10)"
+        users="Users to include in the split (e.g., '@user1 @user2')",
+        guild="Guild cut percentage (default: 10)",
+        user_cut="Optional: Assign a uniform percentage to all users (e.g., 20 for 20%)"
     )
-    async def split_cmd(interaction: discord.Interaction, total_sand: int, users: str, guild: int = 10):  # noqa: F841
-        await split(interaction, total_sand, users, guild)
+    async def split_cmd(interaction: discord.Interaction, total_sand: int, users: str, guild: int = 10, user_cut: int = None):  # noqa: F841
+        await split(interaction, total_sand, users, guild, user_cut)
 
     # Help command
     @bot.tree.command(name=cmd_name("help"), description="Show all available spice tracking commands")
