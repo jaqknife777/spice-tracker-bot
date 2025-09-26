@@ -8,6 +8,8 @@ import importlib
 import inspect
 from typing import Dict, Any, Callable, List, Tuple
 
+from .settings import Settings
+
 # Automatically discover and import all command modules
 def discover_commands():
     """Automatically discover all command modules in this package"""
@@ -39,7 +41,7 @@ def discover_commands():
                     command_func = getattr(module, 'help_command')
                 # No special cases needed - file name matches function name
 
-                if command_func:
+                if command_func and inspect.isfunction(command_func):
                     commands[module_name] = command_func
 
                     # Extract function signature for Discord.py registration
@@ -76,8 +78,9 @@ def discover_commands():
 # Auto-discover commands, metadata, and signatures
 COMMANDS, COMMAND_METADATA, COMMAND_SIGNATURES = discover_commands()
 
-# Export all discovered commands
+# Export all discovered commands and the Settings class
 __all__ = list(COMMANDS.keys())
+__all__.append('Settings')
 
 # Export all discovered metadata and signatures
 COMMAND_METADATA = COMMAND_METADATA

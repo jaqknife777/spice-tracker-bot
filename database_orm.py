@@ -5,18 +5,23 @@ Supports both PostgreSQL and SQLite through DATABASE_URL configuration.
 import os
 import asyncio
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, StaticPool
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text, ForeignKey, select, update, delete, func, Index
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from utils.logger import logger
+
+
+def _get_naive_utc_now():
+    """Returns the current UTC datetime as a naive datetime object."""
+    return datetime.now(timezone.utc).astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -35,8 +40,8 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), nullable=False)
     total_melange: Mapped[int] = mapped_column(Integer, default=0)
     paid_melange: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
-    last_updated: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow(), onupdate=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now, onupdate=_get_naive_utc_now)
 
     # Relationships
     deposits: Mapped[List["Deposit"]] = relationship("Deposit", back_populates="user")
@@ -62,7 +67,7 @@ class Deposit(Base):
     expedition_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("expeditions.id"))
     melange_amount: Mapped[Optional[int]] = mapped_column(Integer)
     conversion_rate: Mapped[Optional[float]] = mapped_column(Float)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="deposits")
@@ -86,7 +91,7 @@ class Expedition(Base):
     total_sand: Mapped[int] = mapped_column(Integer, nullable=False)
     sand_per_melange: Mapped[Optional[int]] = mapped_column(Integer)
     guild_cut_percentage: Mapped[float] = mapped_column(Float, default=10.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now)
 
     # Relationships
     initiator: Mapped["User"] = relationship("User", foreign_keys=[initiator_id])
@@ -124,8 +129,8 @@ class GuildTreasury(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     total_sand: Mapped[int] = mapped_column(Integer, default=0)
     total_melange: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
-    last_updated: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow(), onupdate=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now, onupdate=_get_naive_utc_now)
 
     # Indices
     __table_args__ = (
@@ -147,7 +152,7 @@ class GuildTransaction(Base):
     target_user_id: Mapped[Optional[str]] = mapped_column(String(50))
     target_username: Mapped[Optional[str]] = mapped_column(String(100))
     description: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now)
 
     # Indices
     __table_args__ = (
@@ -168,7 +173,7 @@ class MelangePayment(Base):
     admin_user_id: Mapped[Optional[str]] = mapped_column(String(50))
     admin_username: Mapped[Optional[str]] = mapped_column(String(100))
     description: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="melange_payments")
@@ -188,8 +193,8 @@ class GlobalSetting(Base):
     setting_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     setting_value: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
-    last_updated: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow(), onupdate=lambda: datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, default=_get_naive_utc_now, onupdate=_get_naive_utc_now)
 
     # Indices
     __table_args__ = (
@@ -200,19 +205,30 @@ class GlobalSetting(Base):
 class Database:
     """Database class using SQLAlchemy ORM for transparent database abstraction."""
 
-    def __init__(self, database_url=None):
+    def __init__(self, database_url=None, for_testing=False):
         self.database_url = database_url or os.getenv('DATABASE_URL')
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable is required")
 
+        # Detect database type using URL scheme
+        from urllib.parse import urlparse
+        parsed_url = urlparse(self.database_url)
+        self.is_sqlite = parsed_url.scheme.startswith('sqlite')
+
+        engine_kwargs = {
+            "echo": False,
+            "future": True,
+        }
+
+        if for_testing and self.is_sqlite:
+            engine_kwargs["poolclass"] = StaticPool
+            engine_kwargs["connect_args"] = {"check_same_thread": False}
+        else:
+            engine_kwargs["poolclass"] = NullPool
+            engine_kwargs["pool_pre_ping"] = True
+
         # Create async engine
-        self.engine = create_async_engine(
-            self.database_url,
-            echo=False,  # Set to True for SQL debugging
-            future=True,
-            poolclass=NullPool,
-            pool_pre_ping=True,
-        )
+        self.engine = create_async_engine(self.database_url, **engine_kwargs)
 
         # Create session factory
         self.session_factory = async_sessionmaker(
@@ -359,7 +375,7 @@ class Database:
         stmt = insert_func(User).values(
             user_id=user_id,
             username=username,
-            last_updated=datetime.utcnow()
+            last_updated=_get_naive_utc_now()
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=['user_id'],
@@ -512,7 +528,7 @@ class Database:
                 if treasury:
                     treasury.total_sand += sand_amount
                     treasury.total_melange += melange_amount
-                    treasury.last_updated = datetime.utcnow()
+                    treasury.last_updated = _get_naive_utc_now()
                 else:
                     treasury = GuildTreasury(
                         total_sand=sand_amount,
@@ -541,7 +557,7 @@ class Database:
                     .where(User.user_id == user_id)
                     .values(
                         total_melange=User.total_melange + melange_amount,
-                        last_updated=datetime.utcnow()
+                        last_updated=_get_naive_utc_now()
                     )
                 )
             await self._log_operation("update", "users", start_time, success=True,
@@ -920,54 +936,65 @@ class Database:
         """Get all unpaid deposits across all users"""
         raise NotImplementedError("Method needs to be implemented")
 
-    async def get_landsraad_bonus_status(self) -> bool:
-        """Get the current landsraad bonus status"""
+    async def get_global_setting(self, setting_key: str) -> Optional[str]:
+        """Get a global setting value by key."""
         start_time = time.time()
         async with self._get_session() as session:
             try:
                 result = await session.execute(
                     select(GlobalSetting.setting_value)
-                    .where(GlobalSetting.setting_key == 'landsraad_bonus_active')
+                    .where(GlobalSetting.setting_key == setting_key)
                 )
                 setting = result.scalar_one_or_none()
-
-                await self._log_operation("select", "global_settings", start_time, success=True,
-                                        result_count=1)
-                return setting and setting.lower() == 'true'
+                await self._log_operation("select", "global_settings", start_time, success=True, key=setting_key)
+                return setting
             except Exception as e:
-                await self._log_operation("select", "global_settings", start_time, success=False,
-                                        error=str(e))
-                # Default to False if there's an error
-                return False
+                await self._log_operation("select", "global_settings", start_time, success=False, key=setting_key, error=str(e))
+                return None
 
-    async def set_landsraad_bonus_status(self, active: bool) -> bool:
-        """Set the landsraad bonus status"""
+    async def set_global_setting(self, setting_key: str, setting_value: str, description: Optional[str] = None):
+        """Set a global setting."""
         start_time = time.time()
         try:
             async with self.transaction() as session:
                 insert_func = sqlite_insert if self.is_sqlite else pg_insert
-
                 stmt = insert_func(GlobalSetting).values(
-                    setting_key='landsraad_bonus_active',
-                    setting_value=str(active).lower(),
-                    description='Whether the landsraad bonus is active (37.5 sand = 1 melange instead of 50)'
+                    setting_key=setting_key,
+                    setting_value=setting_value,
+                    description=description
                 )
+                update_data = {
+                    'setting_value': stmt.excluded.setting_value,
+                    'last_updated': _get_naive_utc_now()
+                }
+                if description is not None:
+                    update_data['description'] = description
+
                 stmt = stmt.on_conflict_do_update(
                     index_elements=['setting_key'],
-                    set_=dict(
-                        setting_value=stmt.excluded.setting_value,
-                        last_updated=datetime.utcnow()
-                    )
+                    set_=update_data
                 )
                 await session.execute(stmt)
-
-            await self._log_operation("upsert", "global_settings", start_time, success=True,
-                                    result_count=1)
+            await self._log_operation("upsert", "global_settings", start_time, success=True, key=setting_key)
             return True
         except Exception as e:
-            await self._log_operation("upsert", "global_settings", start_time, success=False,
-                                    error=str(e))
+            await self._log_operation("upsert", "global_settings", start_time, success=False, key=setting_key, error=str(e))
             raise e
+
+    async def get_all_global_settings(self) -> Dict[str, str]:
+        """Get all global settings as a dictionary."""
+        start_time = time.time()
+        async with self._get_session() as session:
+            try:
+                result = await session.execute(
+                    select(GlobalSetting.setting_key, GlobalSetting.setting_value)
+                )
+                settings = {key: value for key, value in result}
+                await self._log_operation("select_all", "global_settings", start_time, success=True, count=len(settings))
+                return settings
+            except Exception as e:
+                await self._log_operation("select_all", "global_settings", start_time, success=False, error=str(e))
+                return {}
 
     async def add_guild_transaction(self, transaction_type: str, sand_amount: int, melange_amount: int,
                                   expedition_id: Optional[int], admin_user_id: str, admin_username: str,

@@ -2,6 +2,7 @@
 Test the SQLAlchemy ORM database implementation.
 """
 import pytest
+import pytest_asyncio
 from database_orm import Database
 
 
@@ -208,7 +209,7 @@ class TestORMDatabase:
 class TestPaginatedDepositOperations:
     """Test paginated deposit operations."""
 
-    @pytest.fixture(scope="function")
+    @pytest_asyncio.fixture(scope="function")
     async def setup_deposits(self, test_database):
         """Setup a user with many deposits for pagination tests."""
         user_id = "pagination_user"
@@ -221,14 +222,14 @@ class TestPaginatedDepositOperations:
     @pytest.mark.asyncio
     async def test_get_user_deposits_count(self, test_database, setup_deposits):
         """Test counting user deposits."""
-        user_id = await setup_deposits
+        user_id = setup_deposits
         count = await test_database.get_user_deposits_count(user_id)
         assert count == 25
 
     @pytest.mark.asyncio
     async def test_get_user_deposits_pagination(self, test_database, setup_deposits):
         """Test paginated fetching of user deposits."""
-        user_id = await setup_deposits
+        user_id = setup_deposits
 
         # Test first page
         page1 = await test_database.get_user_deposits(user_id, page=1, per_page=10)

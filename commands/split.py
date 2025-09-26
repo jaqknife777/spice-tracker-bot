@@ -18,14 +18,22 @@ COMMAND_METADATA = {
 import re
 import traceback
 import discord
+from typing import Optional
 from utils.base_command import command
-from utils.helpers import get_database, convert_sand_to_melange, send_response, get_sand_per_melange_with_bonus
+from utils.helpers import get_database, convert_sand_to_melange, send_response, get_sand_per_melange_with_bonus, get_guild_cut, get_user_cut
 from utils.logger import logger
 
 
 @command('split')
-async def split(interaction, command_start, total_sand: int, users: str, guild: int = 10, user_cut: int = None, use_followup: bool = True):
+async def split(interaction, command_start, total_sand: int, users: str, guild: Optional[int] = None, user_cut: Optional[int] = None, use_followup: bool = True):
     """Split spice sand among expedition members and convert to melange with guild cut"""
+
+    # Determine effective cuts, giving priority to command options over global settings
+    if guild is None:
+        guild = get_guild_cut()
+
+    if user_cut is None:
+        user_cut = get_user_cut()
 
     try:
         # Validate inputs

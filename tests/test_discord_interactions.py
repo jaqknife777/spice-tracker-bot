@@ -40,32 +40,13 @@ class TestDiscordResponseHandling:
         
         # Mock channel methods
         interaction.channel.send = AsyncMock()
-        interaction.channel.history = AsyncMock()
-        
-        return interaction
-    
-    @pytest.fixture
-    def mock_interaction_deferred(self):
-        """Create a mock interaction that has been deferred."""
-        interaction = self.mock_interaction_complete()
-        interaction.response.defer.return_value = None
-        return interaction
-    
-    @pytest.mark.asyncio
-    async def test_water_command_response_handling(self, mock_interaction_complete):
-        """Test that water command can be called without errors."""
-        # Simple test that verifies the command can be called
-        from commands.water import water
-        
-        # Mock the defer method to succeed
-        mock_interaction_complete.response.defer = AsyncMock()
-        
-        # Mock channel history for reaction adding
+
+        # Create a mock message for history
         mock_message = Mock()
-        mock_message.author = mock_interaction_complete.client
+        mock_message.author = interaction.client
         mock_message.embeds = [Mock()]
         mock_message.add_reaction = AsyncMock()
-        
+
         # Create a proper async iterator for channel history
         class MockHistoryIterator:
             def __init__(self, message):
@@ -81,7 +62,25 @@ class TestDiscordResponseHandling:
                     return self.message
                 raise StopAsyncIteration
 
-        mock_interaction_complete.channel.history.return_value = MockHistoryIterator(mock_message)
+        interaction.channel.history = Mock(return_value=MockHistoryIterator(mock_message))
+
+        return interaction
+
+    @pytest.fixture
+    def mock_interaction_deferred(self):
+        """Create a mock interaction that has been deferred."""
+        interaction = self.mock_interaction_complete()
+        interaction.response.defer.return_value = None
+        return interaction
+
+    @pytest.mark.asyncio
+    async def test_water_command_response_handling(self, mock_interaction_complete):
+        """Test that water command can be called without errors."""
+        # Simple test that verifies the command can be called
+        from commands.water import water
+
+        # Mock the defer method to succeed
+        mock_interaction_complete.response.defer = AsyncMock()
         
         # Call the water function - it should complete without errors
         try:
@@ -285,36 +284,37 @@ class TestDiscordEmbedStructure:
         interaction.created_at = datetime.now()
         interaction.response = Mock()
         interaction.response.defer = AsyncMock()
-        return interaction
-    
-    @pytest.mark.asyncio
-    async def test_water_embed_structure(self, mock_interaction_complete):
-        """Test that water command creates proper embed structure."""
-        # Mock the defer method to succeed
-        mock_interaction_complete.response.defer = AsyncMock()
-        
-        # Mock channel history for reaction adding
+
+        # Create a mock message for history
         mock_message = Mock()
-        mock_message.author = mock_interaction_complete.client
+        mock_message.author = interaction.client
         mock_message.embeds = [Mock()]
         mock_message.add_reaction = AsyncMock()
-        
+
         # Create a proper async iterator for channel history
         class MockHistoryIterator:
             def __init__(self, message):
                 self.message = message
                 self.yielded = False
-            
+
             def __aiter__(self):
                 return self
-            
+
             async def __anext__(self):
                 if not self.yielded:
                     self.yielded = True
                     return self.message
                 raise StopAsyncIteration
 
-        mock_interaction_complete.channel.history.return_value = MockHistoryIterator(mock_message)
+        interaction.channel.history = Mock(return_value=MockHistoryIterator(mock_message))
+
+        return interaction
+
+    @pytest.mark.asyncio
+    async def test_water_embed_structure(self, mock_interaction_complete):
+        """Test that water command creates proper embed structure."""
+        # Mock the defer method to succeed
+        mock_interaction_complete.response.defer = AsyncMock()
         
         # Call the water function - it should complete without errors
         try:
@@ -329,29 +329,6 @@ class TestDiscordEmbedStructure:
         """Test that embed field access is safe and doesn't cause errors."""
         # Mock the defer method to succeed
         mock_interaction_complete.response.defer = AsyncMock()
-        
-        # Mock channel history for reaction adding
-        mock_message = Mock()
-        mock_message.author = mock_interaction_complete.client
-        mock_message.embeds = [Mock()]
-        mock_message.add_reaction = AsyncMock()
-        
-        # Create a proper async iterator for channel history
-        class MockHistoryIterator:
-            def __init__(self, message):
-                self.message = message
-                self.yielded = False
-            
-            def __aiter__(self):
-                return self
-            
-            async def __anext__(self):
-                if not self.yielded:
-                    self.yielded = True
-                    return self.message
-                raise StopAsyncIteration
-
-        mock_interaction_complete.channel.history.return_value = MockHistoryIterator(mock_message)
         
         # Test with various destination inputs
         test_destinations = [

@@ -3,7 +3,7 @@ Helper functions used across multiple commands.
 """
 
 import os
-from typing import List
+from typing import List, Optional
 from database_orm import Database
 from utils.logger import logger
 # Initialize database (lazy initialization)
@@ -24,20 +24,54 @@ def get_sand_per_melange() -> int:
     """Get the spice sand to melange conversion rate (hardcoded constant) - DEPRECATED"""
     return SAND_PER_MELANGE_NORMAL
 
-# A global variable to cache the bonus status
-_landsraad_bonus_active = False # Default value
+# Global variables to cache settings
+_landsraad_bonus_active = False
+_user_cut: Optional[int] = None
+_guild_cut: int = 10
+_region: Optional[str] = None
 
-async def initialize_bonus_status():
-    """Called once when the bot starts up."""
-    global _landsraad_bonus_active
+async def initialize_global_settings():
+    """Called once when the bot starts up to load all global settings."""
+    global _landsraad_bonus_active, _user_cut, _guild_cut, _region
+    logger.info("Initializing global settings from database...")
     try:
         db = get_database()
-        status = await db.get_landsraad_bonus_status()
-        _landsraad_bonus_active = status if status is not None else False
+        settings = await db.get_all_global_settings()
+
+        # Landsraad Bonus
+        landsraad_status_str = settings.get('landsraad_bonus_active')
+        _landsraad_bonus_active = landsraad_status_str is not None and landsraad_status_str.lower() == 'true'
         logger.info(f"Initial Landsraad bonus status loaded: {_landsraad_bonus_active}")
+
+        # User Cut
+        user_cut_val = settings.get('user_cut')
+        if user_cut_val and user_cut_val.isdigit() and int(user_cut_val) != 0:
+            _user_cut = int(user_cut_val)
+        else:
+            _user_cut = None
+        logger.info(f"Initial user_cut loaded: {_user_cut}")
+
+        # Guild Cut
+        guild_cut_val = settings.get('guild_cut')
+        if guild_cut_val and guild_cut_val.isdigit() and int(guild_cut_val) != 0:
+            _guild_cut = int(guild_cut_val)
+        else:
+            _guild_cut = 10 # Default value
+        logger.info(f"Initial guild_cut loaded: {_guild_cut}")
+
+        # Region
+        region_val = settings.get('region')
+        _region = region_val if region_val else None
+        logger.info(f"Initial region loaded: {_region}")
+
     except Exception as e:
+        logger.error(f"Error initializing global settings: {e}", exc_info=True)
+        # Ensure defaults are set on error
         _landsraad_bonus_active = False
-        logger.error(f"Error initializing landsraad bonus status: {e}")
+        _user_cut = None
+        _guild_cut = 10
+        _region = None
+        logger.warning("Global settings initialization failed. Using default values.")
 
 def is_landsraad_bonus_active():
     """Reads the bonus status from the in-memory cache."""
@@ -48,6 +82,37 @@ def update_landsraad_bonus_status(new_status: bool):
     global _landsraad_bonus_active
     _landsraad_bonus_active = new_status
     logger.info(f"Landsraad bonus status updated in cache: {new_status}")
+
+
+def get_user_cut() -> Optional[int]:
+    """Reads the user_cut from the in-memory cache."""
+    return _user_cut
+
+def update_user_cut(new_value: Optional[int]):
+    """Updates the in-memory cache for user_cut, treating 0 as None."""
+    global _user_cut
+    _user_cut = new_value if new_value and new_value != 0 else None
+    logger.info(f"User cut updated in cache: {_user_cut}")
+
+def get_guild_cut() -> int:
+    """Reads the guild_cut from the in-memory cache."""
+    return _guild_cut
+
+def update_guild_cut(new_value: Optional[int]):
+    """Updates the in-memory cache for guild_cut, treating 0 or None as 10."""
+    global _guild_cut
+    _guild_cut = new_value if new_value and new_value != 0 else 10
+    logger.info(f"Guild cut updated in cache: {_guild_cut}")
+
+def get_region() -> Optional[str]:
+    """Reads the region from the in-memory cache."""
+    return _region
+
+def update_region(new_value: Optional[str]):
+    """Updates the in-memory cache for region."""
+    global _region
+    _region = new_value
+    logger.info(f"Region updated in cache: {_region}")
 
 
 async def get_sand_per_melange_with_bonus() -> float:

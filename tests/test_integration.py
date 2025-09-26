@@ -29,8 +29,7 @@ class TestBotIntegration:
         from bot import register_commands
         assert callable(register_commands)
 
-    @patch('bot.bot')
-    def test_command_registration_called(self, mock_bot, mock_bot_instance):
+    def test_command_registration_called(self):
         """Test that command registration is called during bot startup."""
         # This would test the actual registration logic
         # For now, we just verify the function exists and is callable

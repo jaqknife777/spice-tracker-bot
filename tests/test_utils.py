@@ -74,7 +74,7 @@ class TestDatabaseUtils:
     """Test database utility functions."""
     
     @pytest.mark.asyncio
-    async def test_timed_database_operation(self, mock_database):
+    async def test_timed_database_operation(self):
         """Test timed database operation wrapper."""
         async def test_operation():
             return "success"
@@ -87,17 +87,19 @@ class TestDatabaseUtils:
         assert isinstance(result[1], (int, float))
     
     @pytest.mark.asyncio
-    async def test_validate_user_exists(self, mock_database):
+    async def test_validate_user_exists(self, test_database):
         """Test user validation."""
         # First call returns None (user doesn't exist), second call returns the user
-        mock_database.get_user.side_effect = [None, {"user_id": "123", "username": "TestUser"}]
-        mock_database.upsert_user.return_value = {"user_id": "123", "username": "TestUser"}
         
-        result = await validate_user_exists(mock_database, "123", "TestUser")
+        result = await validate_user_exists(test_database, "123", "TestUser")
         
-        assert result["user_id"] == "123"
-        mock_database.upsert_user.assert_called_once_with("123", "TestUser")
-        assert mock_database.get_user.call_count == 2  # Called twice: once to check, once after creation
+        assert result is not None
+        assert result['user_id'] == "123"
+
+        # Verify the user was actually inserted
+        user = await test_database.get_user("123")
+        assert user is not None
+        assert user['username'] == "TestUser"
     
 
 
