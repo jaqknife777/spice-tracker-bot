@@ -1,82 +1,86 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import patch, Mock, AsyncMock
 from commands.split import split
+from utils.helpers import get_user_cut, get_guild_cut, update_user_cut, update_guild_cut
+import datetime
+import discord
 
-@pytest.fixture
-def mock_interaction():
-    """Provides a default mock interaction object."""
-    interaction = AsyncMock()
-    interaction.user = MagicMock()
-    interaction.user.id = "12345"
-    interaction.user.display_name = "Test User"
-    interaction.created_at = MagicMock()
-    interaction.guild.fetch_member.return_value = MagicMock(display_name="Fetched User")
-    interaction.client.fetch_user.return_value = MagicMock(display_name="Fetched User")
-    return interaction
+@pytest.fixture(autouse=True)
+def mock_get_db(mocker, test_database):
+    mocker.patch('commands.split.get_database', return_value=test_database, create=True)
 
-@pytest.fixture
-def split_mocks(mocker):
-    """Mocks dependencies for the split command."""
-    mock_db_instance = AsyncMock()
-    mocker.patch('commands.split.get_database', return_value=mock_db_instance)
-    mocker.patch('commands.split.logger')
+def setup_split_mock_interaction(mock_interaction):
+    """Helper function to set up the mock interaction for split command tests."""
+    mock_interaction.created_at = datetime.datetime.now(datetime.timezone.utc)
+    async def mock_fetch_member(user_id):
+        mock_user = Mock(spec=discord.Member)
+        mock_user.id = int(user_id)
+        mock_user.display_name = f"TestUser{user_id}"
+        mock_user.mention = f"<@{user_id}>"
+        return mock_user
 
-    # Mock helpers from utils.helpers
-    mocker.patch('commands.split.get_user_cut', return_value=None)
-    mocker.patch('commands.split.get_guild_cut', return_value=10)
-    mocker.patch('commands.split.get_sand_per_melange_with_bonus', AsyncMock(return_value=50))
-    mocker.patch('commands.split.convert_sand_to_melange', AsyncMock(side_effect=lambda x: (x // 50, x % 50)))
-    mock_send_response = mocker.patch('commands.split.send_response', new_callable=AsyncMock)
+    mock_interaction.guild.fetch_member = AsyncMock(side_effect=mock_fetch_member)
+    mock_interaction.client.fetch_user = AsyncMock(side_effect=mock_fetch_member)
+    mock_interaction.response.is_done.return_value = True
+    return mock_interaction
 
-    # Mock helpers from utils.database_utils (imported within the function)
-    mocker.patch('utils.database_utils.validate_user_exists', new_callable=AsyncMock)
+class TestSplitCommand:
+    @pytest.mark.asyncio
+    async def test_split_command_with_user_cut(self, mock_interaction):
+        mock_interaction = setup_split_mock_interaction(mock_interaction)
+        with patch('commands.split.send_response') as mock_send_response:
+            await split(mock_interaction, total_sand=1000, users="<@123> <@456>", guild=10, user_cut=20)
+            assert mock_send_response.call_count == 2
+            final_call_kwargs = mock_send_response.call_args.kwargs
+            embed = final_call_kwargs['embed']
+            assert '4 melange' in embed.fields[0].value
 
-    # Mock helpers from utils.embed_utils (imported within the function)
-    mock_build_embed = mocker.patch('utils.embed_utils.build_status_embed', return_value=MagicMock(build=lambda: "embed_obj"))
+    @pytest.mark.asyncio
+    async def test_split_command_with_invalid_user_cut(self, mock_interaction):
+        mock_interaction = setup_split_mock_interaction(mock_interaction)
+        with patch('commands.split.send_response') as mock_send_response:
+            await split(mock_interaction, total_sand=1000, users="<@123> <@456>", guild=10, user_cut=110)
+            mock_send_response.assert_called_once()
+            content_arg = mock_send_response.call_args.args[1]
+            assert "User cut percentage must be between 0 and 100" in content_arg
 
-    return mock_db_instance, mock_send_response, mock_build_embed
+    @pytest.mark.asyncio
+    async def test_split_command_with_conflicting_user_cut(self, mock_interaction):
+        mock_interaction = setup_split_mock_interaction(mock_interaction)
+        with patch('commands.split.send_response') as mock_send_response:
+            await split(mock_interaction, total_sand=1000, users="<@123> 30", guild=10, user_cut=20)
+            mock_send_response.assert_called_once()
+            content_arg = mock_send_response.call_args.args[1]
+            assert "You cannot provide individual percentages when using `user_cut`" in content_arg
 
-@pytest.mark.asyncio
-async def test_split_command_success_equal_split(mock_interaction, split_mocks):
-    # Given
-    db_mock, send_response_mock, build_embed_mock = split_mocks
-    db_mock.create_expedition.return_value = 1 # expedition_id
-    total_sand = 10000
-    users_str = "<@1> <@2>"
+    @pytest.mark.asyncio
+    async def test_split_command_with_user_cut_and_guild_warning(self, mock_interaction):
+        mock_interaction = setup_split_mock_interaction(mock_interaction)
+        default_guild_cut = get_guild_cut()
+        non_default_guild_cut = default_guild_cut + 10
+        with patch('commands.split.send_response') as mock_send_response:
+            await split(mock_interaction, total_sand=1000, users="<@123> <@456>", guild=non_default_guild_cut, user_cut=20)
+            assert mock_send_response.called
+            first_call_args = mock_send_response.call_args_list[0].args
+            content_arg = first_call_args[1]
+            total_percentage = 20 * 2
+            expected_warning = f"User percentages ({total_percentage}%) and the specified guild cut ({non_default_guild_cut}%) do not sum to 100%"
+            assert expected_warning in content_arg
 
-    # When
-    await split.__wrapped__(mock_interaction, command_start=0, total_sand=total_sand, users=users_str, guild=10, user_cut=None, use_followup=True)
-
-    # Then
-    db_mock.create_expedition.assert_called_once()
-    assert db_mock.add_expedition_participant.call_count == 2
-    send_response_mock.assert_called_once_with(mock_interaction, embed="embed_obj", use_followup=True)
-
-@pytest.mark.asyncio
-async def test_split_command_percentage_split(mock_interaction, split_mocks):
-    # Given
-    db_mock, send_response_mock, build_embed_mock = split_mocks
-    db_mock.create_expedition.return_value = 2
-    total_sand = 10000
-    users_str = "<@1> 60 <@2> 30"
-
-    # When
-    await split.__wrapped__(mock_interaction, command_start=0, total_sand=total_sand, users=users_str, guild=10, user_cut=None, use_followup=True)
-
-    # Then
-    db_mock.create_expedition.assert_called_once()
-    assert db_mock.add_expedition_participant.call_count == 2
-    send_response_mock.assert_called_once_with(mock_interaction, embed="embed_obj", use_followup=True)
-
-@pytest.mark.asyncio
-async def test_split_command_invalid_input(mock_interaction, split_mocks):
-    # Given
-    db_mock, send_response_mock, _ = split_mocks
-
-    # When
-    await split.__wrapped__(mock_interaction, command_start=0, total_sand=0, users="<@1>", guild=10, user_cut=None, use_followup=True)
-
-    # Then
-    db_mock.create_expedition.assert_not_called()
-    send_response_mock.assert_called_once()
-    assert "Total spice sand must be at least 1" in send_response_mock.call_args.args[1]
+    @pytest.mark.asyncio
+    async def test_split_command_uses_global_defaults(self, mock_interaction):
+        mock_interaction = setup_split_mock_interaction(mock_interaction)
+        update_guild_cut(20)
+        update_user_cut(15)
+        with patch('commands.split.get_sand_per_melange_with_bonus', return_value=50.0), \
+             patch('commands.split.send_response') as mock_send_response:
+            await split(mock_interaction, total_sand=1000, users="<@123> <@456>", guild=None, user_cut=None)
+            assert mock_send_response.call_count == 2
+            final_call_kwargs = mock_send_response.call_args.kwargs
+            embed = final_call_kwargs['embed']
+            assert '**TestUser123**: 3 melange (15.0%)' in embed.fields[0].value
+            assert '**TestUser456**: 3 melange (15.0%)' in embed.fields[0].value
+            assert '70.0%' in embed.fields[1].value
+            assert '14 melange' in embed.fields[1].value
+        update_guild_cut(None)
+        update_user_cut(None)

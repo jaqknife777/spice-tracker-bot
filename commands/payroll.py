@@ -19,8 +19,19 @@ from utils.logger import logger
 
 
 @admin_command('payroll')
-async def payroll(interaction, command_start, use_followup: bool = True):
+async def payroll(interaction, command_start, confirm: bool, use_followup: bool = True):
     """Process payments for all unpaid harvesters (Admin only)"""
+
+    if not confirm:
+        embed = build_status_embed(
+            title="💰 Payroll Cancelled",
+            description="You must set the `confirm` parameter to `True` to proceed with the payroll.",
+            color=0xF39C12,
+            fields={"✅ How to Run Payroll": "Use `/payroll confirm:True` to confirm the payroll."},
+            timestamp=interaction.created_at
+        )
+        await send_response(interaction, embed=embed.build(), use_followup=use_followup, ephemeral=True)
+        return
 
     # Pay all users their pending melange
     payroll_result, payroll_time = await timed_database_operation(
@@ -31,6 +42,7 @@ async def payroll(interaction, command_start, use_followup: bool = True):
 
     total_paid = payroll_result.get('total_paid', 0)
     users_paid = payroll_result.get('users_paid', 0)
+    paid_users = payroll_result.get('paid_users', [])
 
     if users_paid == 0:
         embed = build_status_embed(
@@ -46,6 +58,14 @@ async def payroll(interaction, command_start, use_followup: bool = True):
     fields = {
         "💰 Payroll Summary": f"**Melange Paid:** {total_paid:,} | **Users Paid:** {users_paid} | **Admin:** {interaction.user.display_name}"
     }
+
+    if paid_users:
+        paid_users_list = [f"**{user['username']}**: {user['amount_paid']:,} melange" for user in paid_users]
+        paid_users_str = "\n".join(paid_users_list)
+        if len(paid_users_str) > 1024:
+            paid_users_str = paid_users_str[:1020] + "\n..."
+        fields["💸 Paid Users"] = paid_users_str
+
 
     embed = build_status_embed(
         title="💰 Guild Payroll Complete",

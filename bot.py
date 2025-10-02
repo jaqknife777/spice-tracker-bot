@@ -234,8 +234,9 @@ def register_commands():
 
     # Payroll command
     @bot.tree.command(name=cmd_name("payroll"), description="Process payments for all unpaid harvesters (Admin only)")
-    async def payroll_cmd(interaction: discord.Interaction):  # noqa: F841
-        await payroll(interaction)
+    @app_commands.describe(confirm="Confirm that you want to run payroll (True/False)")
+    async def payroll_cmd(interaction: discord.Interaction, confirm: bool):  # noqa: F841
+        await payroll(interaction, confirm)
 
     # Pending command
     @bot.tree.command(name=cmd_name("pending"), description="View all users with pending melange payments (Admin only)")

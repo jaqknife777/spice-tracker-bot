@@ -4,7 +4,7 @@ Settings command group for managing bot settings.
 import time
 import discord
 from discord import app_commands
-from typing import Literal, Optional, Any, Callable, Dict
+from typing import Literal, Optional, Any, Callable, Dict, List
 
 # Import utility modules
 from utils.database_utils import timed_database_operation
@@ -16,7 +16,11 @@ from utils.helpers import (
     update_landsraad_bonus_status,
     update_user_cut, get_user_cut,
     update_guild_cut, get_guild_cut,
-    update_region, get_region
+    update_region, get_region,
+    parse_roles, format_roles,
+    get_admin_roles, update_admin_roles,
+    get_officer_roles, update_officer_roles,
+    get_user_roles, update_user_roles
 )
 from utils.logger import logger
 from utils.permissions import check_permission
@@ -33,6 +37,104 @@ class Settings(app_commands.Group):
             await interaction.response.send_message(*args, **kwargs)
         else:
             await interaction.followup.send(*args, **kwargs)
+
+    async def _handle_role_setting(
+        self,
+        interaction: discord.Interaction,
+        roles_str: Optional[str],
+        *,
+        setting_key: str,
+        db_description: str,
+        get_func: Callable[[], List[int]],
+        update_func: Callable[[List[int]], None],
+        permission_level: str,
+        title: str,
+        log_name: str,
+    ):
+        """Generic handler for viewing or setting a role-based global setting."""
+        command_start = time.time()
+        await interaction.response.defer(ephemeral=True)
+
+        if not check_permission(interaction, permission_level):
+            await self.send_response(interaction, "❌ You do not have permission to use this command.", ephemeral=True)
+            return
+
+        db = get_database()
+
+        if roles_str is None:
+            # View logic
+            current_roles = get_func()
+            role_mentions = format_roles(current_roles)
+            description = f"Currently configured roles: {', '.join(role_mentions) if role_mentions else 'None'}"
+            embed = build_status_embed(title=title, description=description, color=0x3498DB)
+            await self.send_response(interaction, embed=embed.build())
+        else:
+            # Set logic
+            try:
+                parsed_roles = parse_roles(roles_str)
+                db_value = ",".join(map(str, parsed_roles))
+
+                await db.set_global_setting(setting_key, db_value, db_description)
+                update_func(parsed_roles)
+
+                role_mentions = format_roles(parsed_roles)
+                description = f"Roles updated to: {', '.join(role_mentions) if role_mentions else 'None'}"
+                embed = build_status_embed(title=f"✅ {title} Updated", description=description, color=0x00FF00)
+                await self.send_response(interaction, embed=embed.build())
+
+                log_command_metrics(f"Settings {log_name}", str(interaction.user.id), interaction.user.display_name, time.time() - command_start, new_value=parsed_roles)
+
+            except Exception as e:
+                logger.error(f"Error setting {setting_key}: {e}", user_id=str(interaction.user.id))
+                await self.send_response(interaction, f"❌ An error occurred: {e}", ephemeral=True)
+
+    @app_commands.command(name="admin_roles", description="Set or view the roles with admin permissions.")
+    @app_commands.describe(roles="Comma-separated role IDs or @role mentions. Leave blank to view, or send empty to clear.")
+    async def admin_roles(self, interaction: discord.Interaction, roles: Optional[str] = None):
+        """Set or view the admin roles."""
+        await self._handle_role_setting(
+            interaction,
+            roles,
+            setting_key='admin_roles',
+            db_description='Roles with admin permissions',
+            get_func=get_admin_roles,
+            update_func=update_admin_roles,
+            permission_level='admin',
+            title="👑 Admin Roles",
+            log_name="AdminRoles"
+        )
+
+    @app_commands.command(name="officer_roles", description="Set or view the roles with officer permissions.")
+    @app_commands.describe(roles="Comma-separated role IDs or @role mentions. Leave blank to view, or send empty to clear.")
+    async def officer_roles(self, interaction: discord.Interaction, roles: Optional[str] = None):
+        """Set or view the officer roles."""
+        await self._handle_role_setting(
+            interaction,
+            roles,
+            setting_key='officer_roles',
+            db_description='Roles with officer permissions',
+            get_func=get_officer_roles,
+            update_func=update_officer_roles,
+            permission_level='admin_or_officer',
+            title="🛡️ Officer Roles",
+            log_name="OfficerRoles"
+        )
+
+    @app_commands.command(name="user_roles", description="Set or view the roles allowed to use the bot.")
+    @app_commands.describe(roles="Comma-separated role IDs or @role mentions. Leave blank to view, or send empty to clear.")
+    async def user_roles(self, interaction: discord.Interaction, roles: Optional[str] = None):
+        """Set or view the user roles."""
+        await self._handle_role_setting(
+            interaction,
+            roles,
+            setting_key='user_roles',
+            db_description='Roles allowed to use the bot',
+            get_func=get_user_roles,
+            update_func=update_user_roles,
+            permission_level='admin_or_officer',
+            title="👥 User Roles",
+            log_name="UserRoles"
+        )
 
     @app_commands.command(name="landsraad", description="Manage the landsraad bonus for melange conversion")
     @app_commands.describe(

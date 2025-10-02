@@ -943,6 +943,7 @@ class Database:
         try:
             count = 0
             total_paid = 0
+            paid_users_details = []
             async with self.transaction() as session:
                 # Get all users
                 result = await session.execute(select(User))
@@ -967,10 +968,11 @@ class Database:
 
                         count += 1
                         total_paid += pending
+                        paid_users_details.append({'username': user.username, 'amount_paid': pending})
 
             await self._log_operation("update", "users", start_time, success=True,
                                     count=count, total_paid=total_paid)
-            return {'total_paid': total_paid, 'users_paid': count}
+            return {'total_paid': total_paid, 'users_paid': count, 'paid_users': paid_users_details}
 
         except Exception as e:
             await self._log_operation("update", "users", start_time, success=False,

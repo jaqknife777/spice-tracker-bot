@@ -1,76 +1,64 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+import time
+from unittest.mock import patch, AsyncMock
 from commands.payroll import payroll
 
-@pytest.fixture
-def mock_interaction():
-    """Provides a default mock interaction object."""
-    interaction = AsyncMock()
-    interaction.user = MagicMock(id=123, display_name="Test Admin")
-    interaction.created_at = MagicMock()
-    return interaction
+@pytest.fixture(autouse=True)
+def mock_get_db(mocker, test_database):
+    """Fixture to automatically mock get_database in the payroll command module."""
+    mocker.patch('commands.payroll.get_database', return_value=test_database, create=True)
 
-@pytest.fixture
-def payroll_mocks(mocker):
-    """Mocks dependencies for the payroll command."""
-    mock_db = mocker.patch('commands.payroll.get_database', return_value=AsyncMock()).return_value
-    mock_send_response = mocker.patch('commands.payroll.send_response', new_callable=AsyncMock)
-    mock_build_embed = mocker.patch('commands.payroll.build_status_embed', return_value=MagicMock(build=lambda: "embed_obj"))
-    mocker.patch('commands.payroll.logger')
+class TestPayrollCommand:
+    @pytest.mark.asyncio
+    async def test_payroll_confirm_false(self, mock_interaction, test_database):
+        with patch('commands.payroll.send_response', new_callable=AsyncMock) as mock_send, \
+             patch.object(test_database, 'pay_all_pending_melange', new_callable=AsyncMock) as mock_pay_all:
+            await payroll.__wrapped__(mock_interaction, time.time(), confirm=False, use_followup=True)
+            mock_pay_all.assert_not_called()
+            mock_send.assert_called_once()
+            kwargs = mock_send.call_args.kwargs
+            assert "Payroll Cancelled" in kwargs['embed'].title
+            assert kwargs['ephemeral'] is True
 
-    async def mock_timed_db_op(name, coro_func, *args, **kwargs):
-        result = await coro_func(*args, **kwargs)
-        return result, 0.1
-    mocker.patch('commands.payroll.timed_database_operation', side_effect=mock_timed_db_op)
+    @pytest.mark.asyncio
+    async def test_payroll_confirm_true(self, mock_interaction, test_database):
+        with patch('commands.payroll.send_response', new_callable=AsyncMock) as mock_send, \
+             patch.object(test_database, 'pay_all_pending_melange', new_callable=AsyncMock) as mock_pay_all:
+            mock_pay_all.return_value = {
+                'users_paid': 2,
+                'total_paid': 700,
+                'paid_users': [
+                    {'username': 'UserA', 'amount_paid': 500},
+                    {'username': 'UserB', 'amount_paid': 200}
+                ]
+            }
+            async def timed_op_side_effect(name, coro, *args, **kwargs):
+                res = await coro(*args, **kwargs)
+                return res, 0.1
+            with patch('commands.payroll.timed_database_operation', side_effect=timed_op_side_effect):
+                await payroll.__wrapped__(mock_interaction, time.time(), confirm=True, use_followup=True)
+            mock_pay_all.assert_called_once()
+            mock_send.assert_called_once()
+            kwargs = mock_send.call_args.kwargs
+            embed = kwargs['embed']
+            assert "Guild Payroll Complete" in embed.title
+            assert "700" in embed.fields[0].value
+            assert "💸 Paid Users" in embed.fields[1].name
+            assert "UserA**: 500" in embed.fields[1].value
+            assert "UserB**: 200" in embed.fields[1].value
 
-    # Return all the mocks needed by the tests
-    return mock_db, mock_send_response, mock_build_embed
-
-@pytest.mark.asyncio
-async def test_payroll_command_success(mock_interaction, payroll_mocks):
-    # Given
-    db_mock, send_response_mock, build_embed_mock = payroll_mocks
-    db_mock.pay_all_pending_melange.return_value = {
-        'total_paid': 300,
-        'users_paid': 2
-    }
-
-    # When
-    await payroll.__wrapped__(mock_interaction, command_start=0, use_followup=True)
-
-    # Then
-    db_mock.pay_all_pending_melange.assert_called_once_with(
-        str(mock_interaction.user.id), mock_interaction.user.display_name
-    )
-    # Verify the success embed is built and sent
-    build_embed_mock.assert_called_once_with(
-        title="💰 Guild Payroll Complete",
-        description="**All users with pending melange have been paid!**",
-        color=0x27AE60,
-        fields={"💰 Payroll Summary": f"**Melange Paid:** 300 | **Users Paid:** 2 | **Admin:** {mock_interaction.user.display_name}"},
-        timestamp=mock_interaction.created_at
-    )
-    send_response_mock.assert_called_once_with(mock_interaction, embed="embed_obj", use_followup=True)
-
-@pytest.mark.asyncio
-async def test_payroll_command_no_pending_payments(mock_interaction, payroll_mocks):
-    # Given
-    db_mock, send_response_mock, build_embed_mock = payroll_mocks
-    db_mock.pay_all_pending_melange.return_value = {
-        'total_paid': 0,
-        'users_paid': 0
-    }
-
-    # When
-    await payroll.__wrapped__(mock_interaction, command_start=0, use_followup=True)
-
-    # Then
-    db_mock.pay_all_pending_melange.assert_called_once()
-    # Verify the 'no payments' embed is built correctly
-    build_embed_mock.assert_called_once_with(
-        title="💰 Payroll Status",
-        description="🏜️ There are no users with pending melange to pay.",
-        color=0x95A5A6,
-        timestamp=mock_interaction.created_at
-    )
-    send_response_mock.assert_called_once_with(mock_interaction, embed="embed_obj", use_followup=True)
+    @pytest.mark.asyncio
+    async def test_payroll_confirm_true_no_one_to_pay(self, mock_interaction, test_database):
+        with patch('commands.payroll.send_response', new_callable=AsyncMock) as mock_send, \
+             patch.object(test_database, 'pay_all_pending_melange', new_callable=AsyncMock) as mock_pay_all:
+            mock_pay_all.return_value = {'users_paid': 0, 'total_paid': 0, 'paid_users': []}
+            async def timed_op_side_effect(name, coro, *args, **kwargs):
+                res = await coro(*args, **kwargs)
+                return res, 0.1
+            with patch('commands.payroll.timed_database_operation', side_effect=timed_op_side_effect):
+                await payroll.__wrapped__(mock_interaction, time.time(), confirm=True, use_followup=True)
+            mock_pay_all.assert_called_once()
+            mock_send.assert_called_once()
+            kwargs = mock_send.call_args.kwargs
+            assert "Payroll Status" in kwargs['embed'].title
+            assert "There are no users with pending melange to pay" in kwargs['embed'].description

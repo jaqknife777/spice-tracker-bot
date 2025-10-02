@@ -3,7 +3,8 @@ Helper functions used across multiple commands.
 """
 
 import os
-from typing import List, Optional
+import re
+from typing import List, Optional, Union
 from database_orm import Database
 from utils.logger import logger
 # Initialize database (lazy initialization)
@@ -15,6 +16,21 @@ def get_database():
     if database is None:
         database = Database()
     return database
+
+def parse_roles(roles_str: str) -> List[int]:
+    """
+    Parses a string of role IDs and role mentions into a list of unique integer role IDs.
+    Supports comma-separated IDs and space-separated mentions.
+    """
+    if not roles_str:
+        return []
+
+    # Find all numbers (for raw IDs) and all mentions (for <@&ID>)
+    raw_ids = re.findall(r'\d+', roles_str)
+
+    # Convert to a set of integers to get unique IDs, then to a sorted list.
+    return sorted(list(set(map(int, raw_ids))))
+
 
 # Sand to melange conversion rates (implementation detail)
 SAND_PER_MELANGE_NORMAL = 50
@@ -29,10 +45,14 @@ _landsraad_bonus_active = False
 _user_cut: Optional[int] = None
 _guild_cut: int = 10
 _region: Optional[str] = None
+_admin_role_ids: List[int] = []
+_officer_role_ids: List[int] = []
+_user_role_ids: List[int] = []
+
 
 async def initialize_global_settings():
     """Called once when the bot starts up to load all global settings."""
-    global _landsraad_bonus_active, _user_cut, _guild_cut, _region
+    global _landsraad_bonus_active, _user_cut, _guild_cut, _region, _admin_role_ids, _officer_role_ids, _user_role_ids
     logger.info("Initializing global settings from database...")
     try:
         db = get_database()
@@ -64,6 +84,15 @@ async def initialize_global_settings():
         _region = region_val if region_val else None
         logger.info(f"Initial region loaded: {_region}")
 
+        # Role settings
+        _admin_role_ids = parse_roles(settings.get('admin_roles', ''))
+        logger.info(f"Initial admin roles loaded: {_admin_role_ids}")
+        _officer_role_ids = parse_roles(settings.get('officer_roles', ''))
+        logger.info(f"Initial officer roles loaded: {_officer_role_ids}")
+        _user_role_ids = parse_roles(settings.get('user_roles', ''))
+        logger.info(f"Initial user roles loaded: {_user_role_ids}")
+
+
     except Exception as e:
         logger.error(f"Error initializing global settings: {e}", exc_info=True)
         # Ensure defaults are set on error
@@ -71,6 +100,9 @@ async def initialize_global_settings():
         _user_cut = None
         _guild_cut = 10
         _region = None
+        _admin_role_ids = []
+        _officer_role_ids = []
+        _user_role_ids = []
         logger.warning("Global settings initialization failed. Using default values.")
 
 def is_landsraad_bonus_active():
@@ -113,6 +145,36 @@ def update_region(new_value: Optional[str]):
     global _region
     _region = new_value
     logger.info(f"Region updated in cache: {_region}")
+
+def get_admin_roles() -> List[int]:
+    """Reads the admin_roles from the in-memory cache."""
+    return _admin_role_ids
+
+def update_admin_roles(new_roles: List[int]):
+    """Updates the in-memory cache for admin_roles."""
+    global _admin_role_ids
+    _admin_role_ids = new_roles
+    logger.info(f"Admin roles updated in cache: {new_roles}")
+
+def get_officer_roles() -> List[int]:
+    """Reads the officer_roles from the in-memory cache."""
+    return _officer_role_ids
+
+def update_officer_roles(new_roles: List[int]):
+    """Updates the in-memory cache for officer_roles."""
+    global _officer_role_ids
+    _officer_role_ids = new_roles
+    logger.info(f"Officer roles updated in cache: {new_roles}")
+
+def get_user_roles() -> List[int]:
+    """Reads the user_roles from the in-memory cache."""
+    return _user_role_ids
+
+def update_user_roles(new_roles: List[int]):
+    """Updates the in-memory cache for user_roles."""
+    global _user_role_ids
+    _user_role_ids = new_roles
+    logger.info(f"User roles updated in cache: {new_roles}")
 
 
 async def get_sand_per_melange_with_bonus() -> float:
@@ -221,7 +283,6 @@ async def send_response(interaction, content=None, embed=None, view=None, epheme
                         fallback_error=str(fallback_error))
             # Last resort - just log the error, don't raise
 
-
 def build_admin_officer_role_mentions() -> str:
     """Build a mention string for configured admin and officer roles.
 
@@ -229,31 +290,20 @@ def build_admin_officer_role_mentions() -> str:
         A space-separated string of role mentions like "<@&123> <@&456>", or an empty string
         if no roles are configured or on error.
     """
-    from utils.logger import logger
     try:
-        from utils.permissions import get_admin_role_ids, get_officer_role_ids
+        admin_role_ids: List[int] = get_admin_roles()
+        officer_role_ids: List[int] = get_officer_roles()
 
-        admin_role_ids: List[int] = get_admin_role_ids()
-        officer_role_ids: List[int] = get_officer_role_ids()
+        # Combine and deduplicate role IDs
+        role_ids = sorted(list(set(admin_role_ids + officer_role_ids)))
 
-        role_ids: List[int] = []
-        if admin_role_ids:
-            role_ids.extend(admin_role_ids)
-        if officer_role_ids:
-            role_ids.extend(officer_role_ids)
+        if not role_ids:
+            return ""
 
-        seen = set()
-        mentions: List[str] = []
-        for role_id in role_ids:
-            if role_id not in seen:
-                seen.add(role_id)
-                mentions.append(f"<@&{role_id}>")
-
-        return " ".join(mentions)
+        return " ".join([f"<@&{rid}>" for rid in role_ids])
     except Exception as e:
         logger.warning(f"Failed to build admin/officer role mentions: {e}")
         return ""
-
 
 def format_melange(amount: float) -> str:
     """Formats melange amount, removing .00 for whole numbers."""
@@ -261,3 +311,16 @@ def format_melange(amount: float) -> str:
         return f"{int(amount):,}"
     else:
         return f"{amount:,.2f}"
+
+
+def format_roles(role_ids: List[Union[int, str]]) -> List[str]:
+    """
+    Formats a list of role IDs into a list of Discord role mentions.
+
+    Args:
+        role_ids: A list of role IDs (can be integers or strings).
+
+    Returns:
+        A list of formatted role mention strings.
+    """
+    return [f"<@&{rid}>" for rid in role_ids]
